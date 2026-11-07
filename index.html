@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LelangKu — Platform Lelang Online Real-Time</title>
+<meta name="description" content="LelangKu: platform lelang online real-time. Ikuti lelang, pasang bid, dan menangkan barang favorit Anda.">
+<style>
+:root{
+  --navy:#101828; --navy2:#172554; --navy3:#1e3a5f;
+  --bg:#F8FAFC; --card:#FFFFFF; --text:#101828; --muted:#667085; --line:#E4E7EC;
+  --gold:#D6A84F; --gold-dark:#B78A2E;
+  --green:#16A34A; --green-bg:#DCFCE7;
+  --red:#DC2626; --red-bg:#FEE2E2;
+  --amber-bg:#FEF3C7; --amber:#92400E;
+  --radius:16px;
+  --shadow:0 4px 24px rgba(16,24,40,.08);
+  --shadow-lg:0 12px 40px rgba(16,24,40,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none}
+input,select{font:inherit}
+img{display:block;max-width:100%}
+.wrap{max-width:1200px;margin:0 auto;padding:0 20px}
+.hidden{display:none !important}
+
+/* ---------- Header ---------- */
+header.site{position:sticky;top:0;z-index:50;background:var(--navy);color:#fff;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.nav{display:flex;align-items:center;gap:20px;height:64px}
+.logo{font-size:22px;font-weight:800;letter-spacing:.2px;white-space:nowrap}
+.logo span{color:var(--gold)}
+.nav-links{display:flex;gap:22px;margin-left:12px;font-size:15px}
+.nav-links a{opacity:.85;padding:6px 2px}
+.nav-links a:hover{opacity:1;color:var(--gold)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.user-chip{display:flex;align-items:center;gap:8px;font-size:14px;background:rgba(255,255,255,.1);padding:6px 12px;border-radius:999px;max-width:220px}
+.user-chip b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 18px;border-radius:10px;font-weight:600;font-size:15px;transition:.15s;border:1px solid transparent}
+.btn-gold{background:var(--gold);color:#1A1A1A}
+.btn-gold:hover{background:var(--gold-dark);color:#fff}
+.btn-outline{border-color:rgba(255,255,255,.4);color:#fff}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-navy{background:var(--navy2);color:#fff}
+.btn-navy:hover{background:var(--navy3)}
+.btn-light{background:#fff;color:var(--navy);border-color:var(--line)}
+.btn-light:hover{border-color:var(--gold)}
+.btn-block{width:100%}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-sm{padding:7px 12px;font-size:13.5px;border-radius:8px}
+.hamburger{display:none;color:#fff;font-size:24px;padding:6px}
+
+/* ---------- Hero ---------- */
+.hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 60%,#1D4ED8 130%);color:#fff;padding:56px 0 64px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(214,168,79,.35),transparent 65%)}
+.hero h1{font-size:clamp(28px,4.5vw,44px);line-height:1.15;font-weight:800;max-width:640px}
+.hero h1 em{font-style:normal;color:var(--gold)}
+.hero p{margin-top:14px;font-size:17px;opacity:.85;max-width:560px}
+.hero-search{display:flex;gap:10px;margin-top:26px;max-width:620px;position:relative;z-index:2}
+.hero-search input{flex:1;padding:14px 18px;border-radius:12px;border:none;font-size:16px;min-width:0}
+.hero-search .btn{padding:14px 22px;border-radius:12px}
+.hero-stats{display:flex;gap:14px;flex-wrap:wrap;margin-top:30px;position:relative;z-index:2}
+.stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 20px;min-width:150px}
+.stat b{display:block;font-size:24px;color:var(--gold)}
+.stat span{font-size:13.5px;opacity:.8}
+
+/* ---------- Sections & cards ---------- */
+section.block{padding:44px 0 8px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin-bottom:18px}
+.sec-head h2{font-size:24px;font-weight:800}
+.sec-head p{color:var(--muted);font-size:14.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;transition:.15s}
+.card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.card-img{position:relative;aspect-ratio:4/3;background:linear-gradient(135deg,var(--navy2),var(--navy3));overflow:hidden}
+.card-img img{width:100%;height:100%;object-fit:cover}
+.card-img .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.65);font-size:15px;font-weight:600;text-align:center;padding:12px}
+.card-img img:not(.hidden)+.ph{display:none}
+.pill{position:absolute;top:10px;left:10px;padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:700;z-index:2}
+.pill-live{background:var(--green);color:#fff}
+.pill-scheduled{background:var(--gold);color:#1A1A1A}
+.pill-ended,.pill-completed,.pill-cancelled,.pill-paused{background:var(--red);color:#fff}
+.pill-draft,.pill-default{background:#475467;color:#fff}
+.card-body{padding:16px;display:flex;flex-direction:column;gap:7px;flex:1}
+.card-cat{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gold-dark)}
+.card-title{font-size:17px;font-weight:700;line-height:1.3}
+.card-row{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
+.card-row b{color:var(--text)}
+.card-price{font-size:19px;font-weight:800;color:var(--navy2)}
+.countdown{font-variant-numeric:tabular-nums;font-weight:700;color:var(--red);font-size:14px}
+.countdown.ok{color:var(--muted)}
+.card .btn{margin-top:auto}
+
+/* categories */
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.cat-card{background:var(--navy);color:#fff;border-radius:14px;padding:20px 16px;cursor:pointer;transition:.15s;border:1px solid transparent}
+.cat-card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.cat-card b{display:block;font-size:16.5px}
+.cat-card span{font-size:13px;opacity:.75}
+
+/* ---------- Marketplace controls ---------- */
+.controls{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;box-shadow:var(--shadow)}
+.controls input[type=search]{flex:1;min-width:200px;padding:11px 14px;border:1px solid var(--line);border-radius:10px}
+.controls select{padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.controls label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+
+/* ---------- How it works ---------- */
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:14px}
+.step{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 14px;text-align:center}
+.step .num{width:38px;height:38px;margin:0 auto 10px;border-radius:50%;background:var(--navy);color:var(--gold);font-weight:800;display:flex;align-items:center;justify-content:center}
+.step b{display:block;font-size:14.5px;margin-bottom:4px}
+.step p{font-size:13px;color:var(--muted)}
+
+/* ---------- States ---------- */
+.skel{border-radius:var(--radius);background:linear-gradient(100deg,#EAECF0 40%,#F4F5F7 50%,#EAECF0 60%);background-size:200% 100%;animation:sh 1.2s infinite;aspect-ratio:4/5}
+@keyframes sh{to{background-position:-200% 0}}
+.state-box{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:42px 20px;text-align:center;color:var(--muted)}
+.state-box b{color:var(--text);display:block;font-size:17px;margin-bottom:6px}
+.state-box.error{border-color:var(--red);color:#7A271A}
+.state-box.error b{color:var(--red)}
+
+/* ---------- Detail ---------- */
+.back-link{display:inline-block;margin:22px 0 14px;color:var(--navy2);font-weight:600}
+.back-link:hover{color:var(--gold-dark)}
+.detail{display:grid;grid-template-columns:1.25fr 1fr;gap:26px;align-items:start;padding-bottom:48px}
+.gallery-main{position:relative;border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,var(--navy2),var(--navy3));aspect-ratio:4/3}
+.gallery-main img{width:100%;height:100%;object-fit:cover}
+.gallery-main .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.65);font-weight:600;padding:16px;text-align:center}
+.thumbs{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+.thumbs button{width:76px;height:60px;border-radius:10px;overflow:hidden;border:2px solid transparent;padding:0;background:var(--navy2)}
+.thumbs button.active{border-color:var(--gold)}
+.thumbs img{width:100%;height:100%;object-fit:cover}
+.detail-info h1{font-size:28px;line-height:1.25;margin:6px 0 10px}
+.desc{color:#344054;white-space:pre-line;margin:12px 0}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.kv div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kv span{display:block;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.kv b{font-size:16.5px}
+.bid-panel{background:var(--navy);color:#fff;border-radius:var(--radius);padding:22px;box-shadow:var(--shadow-lg)}
+.bid-panel h3{font-size:16px;opacity:.85;font-weight:600}
+.bid-panel .now{font-size:32px;font-weight:800;color:var(--gold);margin:4px 0}
+.bid-panel .meta{font-size:14px;opacity:.85;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.bid-panel input[type=number]{width:100%;padding:13px 14px;border-radius:10px;border:none;margin-top:14px;font-size:17px;font-weight:700}
+.chips{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.chip{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:7px 13px;border-radius:999px;font-size:13.5px;font-weight:600}
+.chip:hover{border-color:var(--gold);color:var(--gold)}
+.bid-msg{margin-top:12px;font-size:14px;border-radius:10px;padding:11px 13px;display:none;word-break:break-word}
+.bid-msg.ok{display:block;background:var(--green-bg);color:#067647}
+.bid-msg.err{display:block;background:var(--red-bg);color:#B42318}
+.login-cta{background:rgba(255,255,255,.08);border:1px dashed rgba(255,255,255,.35);border-radius:12px;padding:16px;margin-top:14px;text-align:center;font-size:14.5px}
+.history{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-top:22px}
+.history h3{margin-bottom:12px;font-size:18px}
+.history table{width:100%;border-collapse:collapse;font-size:14.5px}
+.history th,.history td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
+.history th{color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.5px}
+.watch-btn{margin-top:12px}
+
+/* ---------- Fase 2: watchlist, wallet, admin ---------- */
+.star-btn{position:absolute;top:8px;right:8px;z-index:3;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.92);color:#98A2B3;font-size:19px;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.star-btn:hover{color:var(--gold-dark)}
+.star-btn.on{color:var(--gold);background:#FFF7E6}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.badge-live{background:var(--green-bg);color:#067647}
+.badge-sched{background:var(--amber-bg);color:var(--amber)}
+.badge-ended{background:var(--red-bg);color:#B42318}
+.badge-win{background:var(--gold);color:#1A1A1A}
+.badge-outbid{background:var(--red);color:#fff}
+.badge-watch{background:#EAECF0;color:#344054}
+.balance-chip{display:flex;align-items:center;gap:6px;font-size:13.5px;background:rgba(214,168,79,.16);border:1px solid rgba(214,168,79,.45);color:#F6D489;padding:6px 12px;border-radius:999px;white-space:nowrap}
+.ftabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.ftabs button{padding:8px 16px;border-radius:999px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:14px}
+.ftabs button.active{background:var(--navy);color:var(--gold);border-color:var(--navy)}
+.tbl-wrap{background:#fff;border:1px solid var(--line);border-radius:var(--radius);overflow:auto;box-shadow:var(--shadow)}
+table.data{width:100%;border-collapse:collapse;font-size:14.5px;min-width:640px}
+table.data th,table.data td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.data th{color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;background:#FCFCFD}
+table.data tr.clickable{cursor:pointer}
+table.data tr.clickable:hover{background:#FFFBEB}
+.amt-pos{color:var(--green);font-weight:700}
+.amt-neg{color:var(--red);font-weight:700}
+.page-head{padding:30px 0 6px}
+.page-head h1{font-size:28px;font-weight:800}
+.page-head p{color:var(--muted);margin-top:4px}
+.wallet-hero{background:linear-gradient(135deg,#fff,#F2F7FF);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:var(--shadow);margin-top:18px}
+.wallet-hero .bal{font-size:clamp(30px,5vw,44px);font-weight:800;color:var(--navy)}
+.wallet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:16px}
+.wallet-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
+.wallet-card span{display:block;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.wallet-card b{font-size:22px}
+.chart-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:16px}
+.admin-layout{display:grid;grid-template-columns:210px 1fr;gap:20px;align-items:start;padding-bottom:48px}
+.admin-side{background:var(--navy);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:84px}
+.admin-side button{text-align:left;color:#fff;padding:11px 13px;border-radius:10px;font-weight:600;font-size:14.5px;opacity:.85}
+.admin-side button.active{background:rgba(214,168,79,.2);color:var(--gold);opacity:1}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-sec{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.form-sec h3{margin-bottom:4px}
+.form-sec p.sub{color:var(--muted);font-size:13.5px;margin-bottom:14px}
+.field select,.field textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;font:inherit}
+.field input[type=datetime-local]{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px}
+.modal.wide{max-width:640px}
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg button{padding:8px 13px;border-radius:999px;background:#F2F4F7;font-weight:600;font-size:13.5px}
+.seg button.active{background:var(--navy);color:var(--gold)}
+.two-col{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;align-items:start}
+@media (max-width:860px){.admin-layout{grid-template-columns:1fr}.admin-side{position:static;flex-direction:row;flex-wrap:wrap}.form-grid,.two-col{grid-template-columns:1fr}}
+
+/* ---------- Modal / toast ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.62);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal{background:#fff;border-radius:18px;max-width:420px;width:100%;padding:28px;box-shadow:var(--shadow-lg);max-height:92vh;overflow:auto}
+.modal h2{font-size:22px;margin-bottom:4px}
+.modal p.sub{color:var(--muted);font-size:14px;margin-bottom:16px}
+.tabs{display:flex;gap:8px;margin-bottom:18px}
+.tabs button{flex:1;padding:10px;border-radius:10px;background:#F2F4F7;font-weight:600}
+.tabs button.active{background:var(--navy);color:var(--gold)}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:13.5px;font-weight:600;margin-bottom:5px}
+.field input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px}
+.auth-msg{font-size:14px;border-radius:10px;padding:10px 12px;margin-bottom:13px;display:none}
+.auth-msg.ok{display:block;background:var(--green-bg);color:#067647}
+.auth-msg.err{display:block;background:var(--red-bg);color:#B42318}
+.modal .close-x{float:right;font-size:22px;color:var(--muted);line-height:1}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:13px 22px;border-radius:12px;box-shadow:var(--shadow-lg);z-index:200;transition:.25s;font-size:14.5px;max-width:92vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+footer.site{background:var(--navy);color:#D0D5DD;margin-top:64px;padding:40px 0 28px;font-size:14.5px}
+footer.site .cols{display:flex;gap:36px;flex-wrap:wrap;justify-content:space-between}
+footer.site b{color:#fff}
+footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12);font-size:13px;opacity:.75}
+
+@media (max-width:860px){
+  .detail{grid-template-columns:1fr}
+  .nav-links{display:none}
+  .nav-links.open{display:flex;position:absolute;top:64px;left:0;right:0;background:var(--navy);flex-direction:column;padding:14px 20px;gap:6px}
+  .hamburger{display:block;margin-left:auto}
+  .nav-right{margin-left:0}
+  .hero{padding:40px 0 48px}
+  .hero-search{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap nav">
+    <a class="logo" href="#/">Lelang<span>Ku</span></a>
+    <button class="hamburger" id="hamburger" aria-label="Menu">&#9776;</button>
+    <nav class="nav-links" id="navLinks">
+      <a href="#/" data-nav="marketplace">Marketplace</a>
+      <a href="#/watchlist" data-nav="watchlist">&#9733; Watchlist</a>
+      <a href="#/wallet" data-nav="wallet" id="navWallet" class="hidden">Wallet</a>
+      <a href="#/admin" data-nav="admin" id="navAdmin" class="hidden">Admin</a>
+      <a href="#how">Cara Kerja</a>
+      <a href="#" id="refreshLink">Muat Ulang Data</a>
+    </nav>
+    <div class="nav-right" id="authArea">
+      <button class="btn btn-outline btn-sm" id="btnLogin">Masuk</button>
+      <button class="btn btn-gold btn-sm" id="btnRegister">Daftar</button>
+    </div>
+  </div>
+</header>
+
+<div id="homeView">
+  <div class="hero">
+    <div class="wrap">
+      <h1>Dapatkan Akses Real-Time untuk <em>Bid &amp; Menang</em> Lelang</h1>
+      <p>Ikuti lelang live dari berbagai kategori, pasang bid Anda, dan pantau harga tertinggi detik demi detik — semua dari satu platform.</p>
+      <form class="hero-search" id="heroSearchForm">
+        <input type="search" id="heroSearch" placeholder="Cari lelang… misalnya BMW, jam, MacBook" aria-label="Cari lelang">
+        <button class="btn btn-gold" type="submit">Cari</button>
+      </form>
+      <div class="hero-stats" id="heroStats">
+        <div class="stat"><b>—</b><span>Memuat statistik…</span></div>
+      </div>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <section class="block" id="featuredSection">
+      <div class="sec-head"><h2>Featured Auctions</h2><p>Lelang pilihan unggulan</p></div>
+      <div class="grid" id="featuredGrid"></div>
+    </section>
+
+    <section class="block">
+      <div class="sec-head"><h2>Live Auctions</h2><p>Sedang berlangsung sekarang</p></div>
+      <div class="grid" id="liveGrid"></div>
+    </section>
+
+    <section class="block">
+      <div class="sec-head"><h2>Ending Soon</h2><p>Segera berakhir — jangan sampai kelewatan</p></div>
+      <div class="grid" id="endingGrid"></div>
+    </section>
+
+    <section class="block">
+      <div class="sec-head"><h2>Kategori</h2><p>Jelajahi berdasarkan kategori</p></div>
+      <div class="cat-grid" id="categoryGrid"></div>
+    </section>
+
+    <section class="block" id="marketplace">
+      <div class="sec-head"><h2>Marketplace</h2><p id="marketCount">Semua lelang</p></div>
+      <div class="controls">
+        <input type="search" id="filterSearch" placeholder="Cari nama lelang…" aria-label="Cari nama lelang">
+        <label>Kategori
+          <select id="filterCategory"><option value="">Semua Kategori</option></select>
+        </label>
+        <label>Status
+          <select id="filterStatus">
+            <option value="">Semua Status</option>
+          </select>
+        </label>
+        <label>Urutkan
+          <select id="filterSort">
+            <option value="ending">Berakhir Segera</option>
+            <option value="highest">Harga Tertinggi</option>
+            <option value="lowest">Harga Terendah</option>
+            <option value="newest">Terbaru</option>
+          </select>
+        </label>
+        <button class="btn btn-light btn-sm" id="btnRefresh" type="button">Muat Ulang</button>
+      </div>
+      <div style="height:18px"></div>
+      <div class="grid" id="marketGrid"></div>
+      <div id="marketState"></div>
+    </section>
+
+    <section class="block" id="how">
+      <div class="sec-head"><h2>Cara Kerja</h2><p>7 langkah dari daftar sampai menang</p></div>
+      <div class="steps">
+        <div class="step"><div class="num">1</div><b>Buat Akun</b><p>Daftar gratis dengan email dan kata sandi.</p></div>
+        <div class="step"><div class="num">2</div><b>Masuk</b><p>Masuk untuk mengaktifkan bid &amp; watchlist.</p></div>
+        <div class="step"><div class="num">3</div><b>Temukan Lelang</b><p>Telusuri Marketplace atau cari barang incaran Anda.</p></div>
+        <div class="step"><div class="num">4</div><b>Pasang Bid</b><p>Masukkan bid di atas bid tertinggi + kelipatan minimum.</p></div>
+        <div class="step"><div class="num">5</div><b>Pantau Lelang</b><p>Ikuti pergerakan harga secara real-time dan tambah ke watchlist.</p></div>
+        <div class="step"><div class="num">6</div><b>Menangkan Lelang</b><p>Bid tertinggi saat waktu habis adalah pemenangnya.</p></div>
+        <div class="step"><div class="num">7</div><b>Selesaikan Transaksi</b><p>Lakukan pembayaran sesuai instruksi dan terima barang Anda.</p></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="detailView" class="hidden">
+  <main class="wrap">
+    <a class="back-link" href="#/">&larr; Kembali ke Marketplace</a>
+    <div id="detailContent"></div>
+  </main>
+</div>
+
+<div id="watchlistView" class="hidden">
+  <main class="wrap">
+    <div class="page-head"><h1>&#9733; Watchlist Saya</h1><p>Lelang yang Anda pantau — lengkap dengan status menang/kalah bid Anda.</p></div>
+    <div id="watchlistContent" style="padding-bottom:48px"></div>
+  </main>
+</div>
+
+<div id="walletView" class="hidden">
+  <main class="wrap">
+    <div class="page-head"><h1>Wallet</h1><p>Saldo lelang Anda: tersedia untuk bid, dan tertahan untuk bid yang sedang memimpin.</p></div>
+    <div id="walletContent" style="padding-bottom:48px"></div>
+  </main>
+</div>
+
+<div id="adminView" class="hidden">
+  <main class="wrap">
+    <div class="page-head"><h1>Admin</h1><p>Kontrol lelang live, kelola saldo wallet pengguna, dan buat lelang baru.</p></div>
+    <div id="adminContent" style="padding-bottom:48px"></div>
+  </main>
+</div>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <div class="logo" style="font-size:20px">Lelang<span style="color:var(--gold)">Ku</span></div>
+        <p style="margin-top:8px;max-width:320px">Platform lelang online real-time untuk semua orang. Bid dengan aman, pantau secara langsung, menangkan barang favorit Anda.</p>
+      </div>
+      <div>
+        <b>Navigasi</b>
+        <p style="margin-top:8px"><a href="#/">Marketplace</a><br><a href="#how">Cara Kerja</a></p>
+      </div>
+      <div>
+        <b>Bantuan</b>
+        <p style="margin-top:8px">Pastikan bid Anda sudah benar sebelum memasangnya.<br>Bid yang sudah terpasang tidak dapat dibatalkan.</p>
+      </div>
+    </div>
+    <div class="fine">&copy; <span id="year"></span> LelangKu. Harga dalam Rupiah (IDR). Data lelang ditampilkan langsung dari database.</div>
+  </div>
+</footer>
+
+<div id="authModal" class="modal-bg hidden" role="dialog" aria-modal="true">
+  <div class="modal">
+    <button class="close-x" id="authClose" aria-label="Tutup">&times;</button>
+    <h2 id="authTitle">Masuk ke LelangKu</h2>
+    <p class="sub" id="authSub">Masuk untuk memasang bid dan memakai watchlist.</p>
+    <div class="tabs">
+      <button id="tabLogin" class="active" type="button">Masuk</button>
+      <button id="tabRegister" type="button">Daftar</button>
+    </div>
+    <div class="auth-msg" id="authMsg"></div>
+    <form id="authForm">
+      <div class="field hidden" id="fieldName">
+        <label for="authName">Nama lengkap</label>
+        <input id="authName" type="text" autocomplete="name" placeholder="Nama Anda">
+      </div>
+      <div class="field">
+        <label for="authEmail">Email</label>
+        <input id="authEmail" type="email" required autocomplete="email" placeholder="nama@email.com">
+      </div>
+      <div class="field">
+        <label for="authPassword">Kata sandi</label>
+        <input id="authPassword" type="password" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button class="btn btn-gold btn-block" id="authSubmit" type="submit">Masuk</button>
+    </form>
+  </div>
+</div>
+
+<div id="confirmModal" class="modal-bg hidden" role="dialog" aria-modal="true">
+  <div class="modal wide">
+    <button class="close-x" id="confirmClose" aria-label="Tutup">&times;</button>
+    <h2 id="confirmTitle">Konfirmasi</h2>
+    <p class="sub" id="confirmBody"></p>
+    <div id="confirmExtra"></div>
+    <div class="field" id="confirmReasonWrap">
+      <label for="confirmReason">Alasan</label>
+      <input id="confirmReason" type="text" placeholder="Tulis alasan tindakan ini">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-light" id="confirmCancel" type="button">Batal</button>
+      <button class="btn btn-gold" id="confirmOk" type="button">Konfirmasi</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+/* ================= Konfigurasi =================
+   Hanya publishable key yang dipakai di frontend (aman untuk publik). */
+const SUPABASE_URL = 'https://oseauffstvagprxpgjtn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_uprZpa40tOg3xawfh1-sYg_hh1AQ4Cq';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ================= State ================= */
+const state = {
+  user: null,
+  profile: null,           // baris profiles user login (role, username)
+  isAdmin: false,
+  wallet: null,            // baris wallets user login
+  walletTxs: [],
+  watchlistIds: new Set(), // auction_id di watchlist user
+  userBidAuctions: new Set(), // auction_id yang pernah di-bid user
+  watchFilter: 'semua',
+  walletFilter: 'semua',
+  walletSearch: '',
+  walletPage: 1,
+  adminTab: 'live',
+  adminAuctionId: null,
+  adminWallets: [],
+  adminGlobalTxs: [],
+  adminBids: [],
+  adminActions: [],
+  categories: [],
+  auctions: [],
+  bidCounts: new Map(),   // auction_id -> jumlah bid
+  bidsByAuction: new Map(), // auction_id -> [bids] (detail)
+  detail: null,            // lelang yang sedang dibuka
+  detailWatching: false,
+  realtimeChannel: null,
+  walletChannel: null,
+  refreshTimer: null,
+};
+
+const $ = (id) => document.getElementById(id);
+const rp = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n || 0));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isLive = (a) => String(a.status || '').toLowerCase() === 'live';
+const currentPrice = (a) => Number(a.current_highest_bid || 0) > 0 ? Number(a.current_highest_bid) : Number(a.starting_price || 0);
+const nextMinBid = (a) => Number(a.current_highest_bid || 0) > 0
+  ? Number(a.current_highest_bid) + Number(a.minimum_increment || 0)
+  : Number(a.starting_price || 0);
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+function fmtCountdown(end) {
+  const diff = new Date(end).getTime() - Date.now();
+  if (isNaN(diff)) return '—';
+  if (diff <= 0) return 'Berakhir';
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor(diff % 86400000 / 3600000);
+  const m = Math.floor(diff % 3600000 / 60000);
+  const s = Math.floor(diff % 60000 / 1000);
+  const pad = (x) => String(x).padStart(2, '0');
+  return (d > 0 ? d + ' hari ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
+}
+function tickCountdowns() {
+  document.querySelectorAll('[data-countdown]').forEach((el) => {
+    const end = el.getAttribute('data-countdown');
+    const txt = fmtCountdown(end);
+    el.textContent = txt;
+    el.classList.toggle('ok', txt !== 'Berakhir' && (new Date(end) - Date.now() > 3600000));
+  });
+}
+setInterval(tickCountdowns, 1000);
+
+function statusPill(a) {
+  const s = String(a.status || 'Live');
+  const key = s.toLowerCase().replace(/\s+/g, '-');
+  const known = ['live', 'scheduled', 'ended', 'completed', 'cancelled', 'paused', 'draft'];
+  const cls = known.includes(key) ? 'pill-' + key : 'pill-default';
+  return `<span class="pill ${cls}">${esc(s)}</span>`;
+}
+
+function sortedImages(a) {
+  const imgs = Array.isArray(a.auction_images) ? [...a.auction_images] : [];
+  return imgs.sort((x, y) => (y.is_primary ? 1 : 0) - (x.is_primary ? 1 : 0) || (x.sort_order || 0) - (y.sort_order || 0));
+}
+function primaryImage(a) {
+  const imgs = sortedImages(a);
+  return imgs.length ? imgs[0].image_url : '';
+}
+
+function cardHTML(a) {
+  const img = primaryImage(a);
+  const count = state.bidCounts.get(a.id) || 0;
+  const cat = a.categories?.name || 'Tanpa Kategori';
+  return `
+  <article class="card">
+    <div class="card-img">
+      <div class="ph">${esc(a.title)}</div>
+      ${img ? `<img src="${esc(img)}" alt="${esc(a.title)}" loading="lazy" onerror="this.classList.add('hidden')">` : ''}
+      ${statusPill(a)}
+      <button type="button" class="star-btn ${state.watchlistIds.has(a.id) ? 'on' : ''}" data-star="${esc(a.id)}" title="Toggle watchlist" aria-label="Toggle watchlist">${state.watchlistIds.has(a.id) ? '&#9733;' : '&#9734;'}</button>
+    </div>
+    <div class="card-body">
+      <div class="card-cat">${esc(cat)}</div>
+      <div class="card-title">${esc(a.title)}</div>
+      <div class="card-row"><span>${Number(a.current_highest_bid || 0) > 0 ? 'Bid tertinggi' : 'Harga awal'}</span><span>${count} bid</span></div>
+      <div class="card-price">${rp(currentPrice(a))}</div>
+      <div class="card-row"><span>Berakhir dalam</span><span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></div>
+      <a class="btn btn-navy btn-block" href="#/auction/${esc(a.slug)}">Lihat Lelang</a>
+    </div>
+  </article>`;
+}
+
+function skeletons(n, gridEl) {
+  gridEl.innerHTML = Array.from({ length: n }, () => '<div class="skel"></div>').join('');
+}
+function emptyBox(target, title, msg) {
+  target.innerHTML = `<div class="state-box"><b>${esc(title)}</b>${esc(msg)}</div>`;
+}
+
+/* ================= Data ================= */
+async function loadData(showSkeleton = false) {
+  if (showSkeleton) {
+    skeletons(4, $('featuredGrid')); skeletons(4, $('liveGrid'));
+    skeletons(4, $('endingGrid')); skeletons(8, $('marketGrid'));
+  }
+  const [catRes, aucRes, bidRes] = await Promise.all([
+    supabase.from('categories').select('id,name,slug,description').order('name'),
+    supabase.from('auctions')
+      .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,location,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,is_featured,anti_sniping_enabled,extension_threshold_seconds,extension_duration_seconds,categories(name,slug),auction_images(image_url,is_primary,sort_order)')
+      .order('end_time', { ascending: true }),
+    supabase.from('bids').select('id,auction_id,amount'),
+  ]);
+
+  if (aucRes.error) {
+    const msg = 'Gagal memuat data lelang: ' + (aucRes.error.message || 'kesalahan tidak dikenal');
+    [$('featuredGrid'), $('liveGrid'), $('endingGrid'), $('marketGrid')].forEach((g) => { g.innerHTML = ''; });
+    emptyBox($('marketState'), 'Terjadi kesalahan', msg + ' — coba tombol Muat Ulang.');
+    $('marketState').firstElementChild?.classList.add('error');
+    return;
+  }
+  $('marketState').innerHTML = '';
+
+  state.categories = catRes.data || [];
+  state.auctions = aucRes.data || [];
+  state.bidCounts = new Map();
+  (bidRes.data || []).forEach((b) => state.bidCounts.set(b.auction_id, (state.bidCounts.get(b.auction_id) || 0) + 1));
+  state.totalBids = (bidRes.data || []).length;
+
+  renderAll();
+}
+
+function renderAll() {
+  renderStats(); renderHomeGrids(); renderCategories(); renderMarketplace();
+  tickCountdowns();
+}
+
+function renderStats() {
+  const live = state.auctions.filter(isLive).length;
+  const cats = state.categories.length;
+  const nilai = state.auctions.filter(isLive).reduce((s, a) => s + currentPrice(a), 0);
+  $('heroStats').innerHTML = `
+    <div class="stat"><b>${live}</b><span>Lelang Live</span></div>
+    <div class="stat"><b>${state.auctions.length}</b><span>Total Lelang</span></div>
+    <div class="stat"><b>${state.totalBids || 0}</b><span>Total Bid Masuk</span></div>
+    <div class="stat"><b>${cats}</b><span>Kategori</span></div>
+    <div class="stat"><b>${rp(nilai)}</b><span>Nilai Bid Live Saat Ini</span></div>`;
+}
+
+function renderHomeGrids() {
+  const featured = state.auctions.filter((a) => a.is_featured);
+  const live = state.auctions.filter(isLive);
+  const ending = [...state.auctions]
+    .filter((a) => isLive(a) && new Date(a.end_time) > new Date())
+    .sort((x, y) => new Date(x.end_time) - new Date(y.end_time)).slice(0, 4);
+
+  $('featuredSection').classList.toggle('hidden', featured.length === 0);
+  $('featuredGrid').innerHTML = featured.map(cardHTML).join('');
+  $('liveGrid').innerHTML = live.length ? live.map(cardHTML).join('') : '';
+  if (!live.length) $('liveGrid').innerHTML = '<div class="state-box"><b>Belum ada lelang live</b>Lelang yang sedang berlangsung akan tampil di sini.</div>';
+  $('endingGrid').innerHTML = ending.length ? ending.map(cardHTML).join('') : '<div class="state-box"><b>Tidak ada yang segera berakhir</b>Cek lagi nanti untuk lelang yang mendekati batas waktu.</div>';
+}
+
+function renderCategories() {
+  const counts = new Map();
+  state.auctions.forEach((a) => counts.set(a.category_id, (counts.get(a.category_id) || 0) + 1));
+  $('categoryGrid').innerHTML = state.categories.map((c) => `
+    <div class="cat-card" data-cat="${esc(c.id)}" role="button" tabindex="0">
+      <b>${esc(c.name)}</b><span>${counts.get(c.id) || 0} lelang</span>
+      ${c.description ? `<span style="display:block;margin-top:6px">${esc(c.description)}</span>` : ''}
+    </div>`).join('') || '<div class="state-box"><b>Belum ada kategori</b>Kategori lelang akan tampil di sini.</div>';
+
+  document.querySelectorAll('.cat-card').forEach((el) => {
+    const go = () => {
+      $('filterCategory').value = el.getAttribute('data-cat');
+      renderMarketplace();
+      document.getElementById('marketplace').scrollIntoView({ behavior: 'smooth' });
+    };
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  });
+
+  const sel = $('filterCategory');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Semua Kategori</option>' + state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  sel.value = cur;
+
+  const stSel = $('filterStatus');
+  const curSt = stSel.value;
+  const statuses = [...new Set(state.auctions.map((a) => a.status).filter(Boolean))];
+  stSel.innerHTML = '<option value="">Semua Status</option>' + statuses.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  stSel.value = curSt;
+}
+
+function renderMarketplace() {
+  const q = ($('filterSearch').value || '').toLowerCase().trim();
+  const cat = $('filterCategory').value;
+  const st = $('filterStatus').value;
+  const sort = $('filterSort').value;
+
+  let list = state.auctions.filter((a) =>
+    (!q || String(a.title || '').toLowerCase().includes(q)) &&
+    (!cat || a.category_id === cat) &&
+    (!st || a.status === st));
+
+  list.sort((x, y) => {
+    if (sort === 'highest') return currentPrice(y) - currentPrice(x);
+    if (sort === 'lowest') return currentPrice(x) - currentPrice(y);
+    if (sort === 'newest') return new Date(y.start_time || y.end_time) - new Date(x.start_time || x.end_time);
+    return new Date(x.end_time) - new Date(y.end_time); // ending
+  });
+
+  $('marketCount').textContent = list.length + ' lelang';
+  $('marketGrid').innerHTML = list.map(cardHTML).join('');
+  if (!list.length) {
+    $('marketGrid').innerHTML = '';
+    emptyBox($('marketState'), 'Tidak ada lelang ditemukan', 'Coba ubah kata kunci atau filter Anda.');
+  } else {
+    $('marketState').innerHTML = '';
+  }
+  tickCountdowns();
+}
+
+/* ================= Detail ================= */
+async function loadDetail(slug) {
+  showView('detailView');
+  window.scrollTo({ top: 0 });
+  $('detailContent').innerHTML = '<div class="skel" style="aspect-ratio:16/7"></div>';
+
+  const { data: a, error } = await supabase
+    .from('auctions')
+    .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,location,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,is_featured,anti_sniping_enabled,extension_threshold_seconds,extension_duration_seconds,categories(name,slug),auction_images(image_url,is_primary,sort_order)')
+    .eq('slug', slug).single();
+
+  if (error || !a) {
+    $('detailContent').innerHTML = '<div class="state-box error"><b>Lelang tidak ditemukan</b>Lelang ini mungkin sudah dihapus atau alamatnya salah.</div>';
+    state.detail = null;
+    return;
+  }
+  state.detail = a;
+
+  // Riwayat bid + username penawar (join profiles, dengan fallback manual bila relasi tidak terbaca)
+  let bids = [];
+  const bidRes = await supabase.from('bids')
+    .select('id,auction_id,bidder_id,amount,bid_sequence,created_at,profiles(username,full_name)')
+    .eq('auction_id', a.id).order('created_at', { ascending: false });
+  if (!bidRes.error && bidRes.data) {
+    bids = bidRes.data;
+  } else {
+    const raw = await supabase.from('bids')
+      .select('id,auction_id,bidder_id,amount,bid_sequence,created_at')
+      .eq('auction_id', a.id).order('created_at', { ascending: false });
+    bids = raw.data || [];
+    const ids = [...new Set(bids.map((b) => b.bidder_id).filter(Boolean))];
+    if (ids.length) {
+      const prof = await supabase.from('profiles').select('id,username,full_name').in('id', ids);
+      const map = new Map((prof.data || []).map((p) => [p.id, p]));
+      bids = bids.map((b) => ({ ...b, profiles: map.get(b.bidder_id) || null }));
+    }
+  }
+  state.bidsByAuction.set(a.id, bids);
+
+  if (state.user) {
+    const w = await supabase.from('watchlists').select('id').eq('user_id', state.user.id).eq('auction_id', a.id).maybeSingle();
+    state.detailWatching = !!(w.data);
+  } else {
+    state.detailWatching = false;
+  }
+  renderDetail();
+}
+
+function renderDetail() {
+  const a = state.detail;
+  if (!a) return;
+  const imgs = sortedImages(a);
+  const bids = state.bidsByAuction.get(a.id) || [];
+  const minNext = nextMinBid(a);
+  const inc = Number(a.minimum_increment || 0);
+  const fmtDate = (d) => new Date(d).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+
+  const gallery = imgs.length ? `
+    <div>
+      <div class="gallery-main">
+        <div class="ph">${esc(a.title)}</div>
+        <img id="galleryMain" src="${esc(imgs[0].image_url)}" alt="${esc(a.title)}" onerror="this.classList.add('hidden')">
+        ${statusPill(a)}
+      </div>
+      ${imgs.length > 1 ? `<div class="thumbs">${imgs.map((im, i) => `
+        <button type="button" class="${i === 0 ? 'active' : ''}" data-thumb="${esc(im.image_url)}"><img src="${esc(im.image_url)}" alt="" onerror="this.parentElement.style.display='none'"></button>`).join('')}</div>` : ''}
+    </div>` : `
+    <div><div class="gallery-main"><div class="ph">${esc(a.title)}</div>${statusPill(a)}</div></div>`;
+
+  const bidRows = bids.length ? bids.map((b) => `
+    <tr>
+      <td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}</td>
+      <td><b>${rp(b.amount)}</b></td>
+      <td>${b.bid_sequence != null ? '#' + esc(b.bid_sequence) : '—'}</td>
+      <td>${new Date(b.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="4" style="color:var(--muted)">Belum ada bid. Jadilah penawar pertama!</td></tr>';
+
+  const bidPanelBody = !isLive(a) ? `
+      <div class="login-cta">Lelang ini berstatus <b>${esc(a.status)}</b> dan tidak menerima bid saat ini.</div>`
+    : !state.user ? `
+      <div class="login-cta">Anda harus masuk untuk memasang bid.<br><br>
+        <button class="btn btn-gold" type="button" id="bidLoginBtn">Masuk / Daftar</button></div>`
+    : `
+      <label style="display:block;font-size:13.5px;margin-top:14px;opacity:.85">Jumlah bid Anda (Rp)</label>
+      <input type="number" id="bidAmount" min="${minNext}" step="${inc || 1}" value="${minNext}">
+      <div class="chips">
+        <button class="chip" type="button" data-chip="1">Minimum ${rp(minNext)}</button>
+        <button class="chip" type="button" data-chip-inc="1">+1&times; kelipatan</button>
+        <button class="chip" type="button" data-chip-inc="2">+2&times; kelipatan</button>
+        <button class="chip" type="button" data-chip-inc="5">+5&times; kelipatan</button>
+      </div>
+      <button class="btn btn-gold btn-block" type="button" id="placeBidBtn" style="margin-top:14px">Pasang Bid</button>
+      <div class="bid-msg" id="bidMsg"></div>`;
+
+  $('detailContent').innerHTML = `
+  <div class="detail">
+    <div>
+      ${gallery}
+      <div class="history">
+        <h3>Riwayat Bid (${bids.length})</h3>
+        <table>
+          <thead><tr><th>Penawar</th><th>Jumlah</th><th>Urutan</th><th>Waktu</th></tr></thead>
+          <tbody>${bidRows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="detail-info">
+      <div class="card-cat">${esc(a.categories?.name || 'Tanpa Kategori')}</div>
+      <h1>${esc(a.title)}</h1>
+      ${a.condition ? `<p style="color:var(--muted)">Kondisi: <b style="color:var(--text)">${esc(a.condition)}</b></p>` : ''}
+      <p class="desc">${esc(a.description || 'Tidak ada deskripsi.')}</p>
+      <div class="kv">
+        <div><span>Harga Awal</span><b>${rp(a.starting_price)}</b></div>
+        <div><span>Kelipatan Minimum</span><b>${rp(a.minimum_increment)}</b></div>
+        <div><span>Mulai</span><b style="font-size:14.5px">${fmtDate(a.start_time)}</b></div>
+        <div><span>Berakhir</span><b style="font-size:14.5px">${fmtDate(a.end_time)}</b></div>
+      </div>
+      <div class="bid-panel">
+        <h3>Bid Tertinggi Saat Ini</h3>
+        <div class="now">${rp(currentPrice(a))}</div>
+        <div class="meta">
+          <span>Bid minimum berikutnya: <b>${rp(minNext)}</b></span>
+          <span>Total bid: <b>${bids.length}</b></span>
+        </div>
+        <div class="meta" style="margin-top:6px"><span>Sisa waktu:</span><span class="countdown" data-countdown="${esc(a.end_time)}" style="color:var(--gold)">${fmtCountdown(a.end_time)}</span></div>
+        ${bidPanelBody}
+        <button class="btn ${state.detailWatching ? 'btn-gold' : 'btn-outline'} btn-block watch-btn" type="button" id="watchBtn">
+          ${state.detailWatching ? '&#9733; Ada di Watchlist Anda' : '&#9734; Tambah ke Watchlist'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+
+  // galeri thumbnail
+  document.querySelectorAll('[data-thumb]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const main = $('galleryMain');
+      if (main) { main.src = btn.getAttribute('data-thumb'); main.classList.remove('hidden'); }
+      document.querySelectorAll('[data-thumb]').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  const loginBtn = $('bidLoginBtn');
+  if (loginBtn) loginBtn.addEventListener('click', () => openAuth('login'));
+
+  document.querySelectorAll('[data-chip]').forEach((c) => c.addEventListener('click', () => { $('bidAmount').value = minNext; }));
+  document.querySelectorAll('[data-chip-inc]').forEach((c) => c.addEventListener('click', () => {
+    $('bidAmount').value = minNext + Number(c.getAttribute('data-chip-inc')) * inc;
+  }));
+
+  const placeBtn = $('placeBidBtn');
+  if (placeBtn) placeBtn.addEventListener('click', placeBid);
+
+  $('watchBtn').addEventListener('click', toggleWatchlist);
+  tickCountdowns();
+}
+
+async function placeBid() {
+  const a = state.detail;
+  const input = $('bidAmount');
+  const msg = $('bidMsg');
+  const btn = $('placeBidBtn');
+  const amount = Number(input.value);
+  const show = (ok, text) => { msg.className = 'bid-msg ' + (ok ? 'ok' : 'err'); msg.textContent = text; };
+  if (!amount || amount <= 0) { show(false, 'Masukkan jumlah bid yang valid.'); return; }
+  btn.disabled = true; btn.textContent = 'Memproses…';
+  const { data, error } = await supabase.rpc('place_bid_with_wallet', { p_auction_id: a.id, p_amount: amount });
+  btn.disabled = false; btn.textContent = 'Pasang Bid';
+  if (error) { show(false, 'Bid ditolak: ' + error.message); return; }
+  const raw = typeof data === 'string' ? data : JSON.stringify(data);
+  const looksOk = data && (data.success === true || data.status === 'success' || data.ok === true);
+  if (looksOk) {
+    // Perbarui saldo dari respons RPC
+    if (state.wallet && data.wallet_available != null) {
+      state.wallet.available_balance = Number(data.wallet_available);
+      if (data.wallet_reserved != null) state.wallet.reserved_balance = Number(data.wallet_reserved);
+      renderWalletChip();
+    }
+    loadWallet(true);
+    show(true, 'Bid berhasil dipasang dan saldo tertahan diperbarui. Respons server: ' + raw);
+    toast('Bid berhasil dipasang');
+    scheduleRefresh();
+  } else if (data && data.code === 'INSUFFICIENT_BALANCE') {
+    msg.className = 'bid-msg err';
+    msg.innerHTML = `${esc(data.error || 'Saldo Anda tidak mencukupi untuk melakukan penawaran ini.')}<br>
+      ${data.minimum_required != null ? 'Bid minimum: <b>' + rp(data.minimum_required) + '</b>. ' : ''}${data.wallet_available != null ? 'Saldo tersedia Anda: <b>' + rp(data.wallet_available) + '</b>.' : ''}<br><br>
+      <a class="btn btn-gold btn-sm" href="#/wallet">Buka Wallet</a>`;
+    if (state.wallet && data.wallet_available != null) { state.wallet.available_balance = Number(data.wallet_available); renderWalletChip(); }
+  } else {
+    show(false, 'Respons server: ' + raw);
+  }
+}
+
+async function toggleWatchlist() {
+  const a = state.detail;
+  if (!state.user) { openAuth('login'); toast('Masuk dulu untuk memakai watchlist'); return; }
+  if (state.detailWatching) {
+    const { error } = await supabase.from('watchlists').delete().eq('user_id', state.user.id).eq('auction_id', a.id);
+    if (error) { toast('Gagal menghapus watchlist: ' + error.message); return; }
+    state.detailWatching = false; toast('Dihapus dari watchlist');
+  } else {
+    const { error } = await supabase.from('watchlists').insert({ user_id: state.user.id, auction_id: a.id });
+    if (error) { toast('Gagal menambah watchlist: ' + error.message); return; }
+    state.detailWatching = true; toast('Ditambahkan ke watchlist');
+  }
+  renderDetail();
+}
+
+async function toggleWatchlistById(auctionId) {
+  if (!state.user) { openAuth('login'); toast('Masuk dulu untuk memakai watchlist'); return; }
+  if (state.watchlistIds.has(auctionId)) {
+    const { error } = await supabase.from('watchlists').delete().eq('user_id', state.user.id).eq('auction_id', auctionId);
+    if (error) { toast('Gagal menghapus watchlist: ' + error.message); return; }
+    state.watchlistIds.delete(auctionId); toast('Dihapus dari watchlist');
+    if (state.detail && state.detail.id === auctionId) { state.detailWatching = false; renderDetail(); }
+  } else {
+    const { error } = await supabase.from('watchlists').insert({ user_id: state.user.id, auction_id: auctionId });
+    if (error) { toast('Gagal menambah watchlist: ' + error.message); return; }
+    state.watchlistIds.add(auctionId); toast('Ditambahkan ke watchlist');
+    if (state.detail && state.detail.id === auctionId) { state.detailWatching = true; renderDetail(); }
+  }
+  document.querySelectorAll(`[data-star="${auctionId}"]`).forEach((b) => {
+    const on = state.watchlistIds.has(auctionId);
+    b.classList.toggle('on', on); b.innerHTML = on ? '&#9733;' : '&#9734;';
+  });
+  if (currentView() === 'watchlist') renderWatchlist();
+}
+document.addEventListener('click', (e) => {
+  const star = e.target.closest('[data-star]');
+  if (star) { e.preventDefault(); toggleWatchlistById(star.getAttribute('data-star')); }
+});
+
+/* ================= Watchlist ================= */
+async function loadUserCollections() {
+  if (!state.user) { state.watchlistIds = new Set(); state.userBidAuctions = new Set(); return; }
+  const [w, b] = await Promise.all([
+    supabase.from('watchlists').select('auction_id').eq('user_id', state.user.id),
+    supabase.from('bids').select('auction_id').eq('bidder_id', state.user.id),
+  ]);
+  state.watchlistIds = new Set((w.data || []).map((x) => x.auction_id));
+  state.userBidAuctions = new Set((b.data || []).map((x) => x.auction_id));
+}
+
+function watchBadges(a) {
+  const st = String(a.status || '').toLowerCase();
+  const ended = ['completed', 'ended', 'cancelled', 'no winner'].includes(st);
+  let h = '';
+  if (isLive(a)) h += '<span class="badge badge-live">Live</span> ';
+  else if (st === 'scheduled') h += '<span class="badge badge-sched">Scheduled</span> ';
+  else if (ended) h += '<span class="badge badge-ended">Berakhir</span> ';
+  else h += `<span class="badge badge-watch">${esc(a.status || '')}</span> `;
+  if (state.user && a.highest_bidder_id === state.user.id) h += '<span class="badge badge-win">&#127942; Winning</span>';
+  else if (state.user && state.userBidAuctions.has(a.id)) h += '<span class="badge badge-outbid">Outbid</span>';
+  else h += '<span class="badge badge-watch">Watching</span>';
+  return h;
+}
+
+function renderWatchlist() {
+  const box = $('watchlistContent');
+  if (!state.user) {
+    box.innerHTML = `<div class="state-box"><b>Masuk untuk melihat watchlist Anda</b>
+      Watchlist menyimpan lelang incaran Anda, lengkap dengan status Winning / Outbid dan countdown live.<br><br>
+      <button class="btn btn-gold" type="button" onclick="document.getElementById('btnLogin')?.click()">Masuk / Daftar</button></div>`;
+    return;
+  }
+  let list = state.auctions.filter((a) => state.watchlistIds.has(a.id));
+  const total = list.length;
+  if (state.watchFilter === 'live') list = list.filter(isLive);
+  if (state.watchFilter === 'ended') list = list.filter((a) => ['completed', 'ended', 'cancelled', 'no winner'].includes(String(a.status || '').toLowerCase()));
+  list = [...list].sort((x, y) => new Date(x.end_time) - new Date(y.end_time));
+  const tabs = [['semua', 'Semua'], ['live', 'Live'], ['ended', 'Berakhir']]
+    .map(([k, l]) => `<button type="button" class="${state.watchFilter === k ? 'active' : ''}" data-wfilter="${k}">${l}</button>`).join('');
+  if (!total) {
+    box.innerHTML = `<div class="ftabs">${tabs}</div>
+      <div class="state-box"><b>Watchlist Anda masih kosong</b>Ketuk ikon bintang &#9734; pada kartu lelang atau tombol watchlist di halaman detail untuk memantau lelang di sini.<br><br>
+      <a class="btn btn-navy" href="#/">Jelajahi Marketplace</a></div>`;
+  } else if (!list.length) {
+    box.innerHTML = `<div class="ftabs">${tabs}</div><div class="state-box"><b>Tidak ada lelang pada filter ini</b>Coba tab lain untuk melihat isi watchlist Anda.</div>`;
+  } else {
+    box.innerHTML = `<div class="ftabs">${tabs}</div><div class="grid">${list.map((a) => watchCardHTML(a)).join('')}</div>`;
+  }
+  box.querySelectorAll('[data-wfilter]').forEach((b) => b.addEventListener('click', () => { state.watchFilter = b.getAttribute('data-wfilter'); renderWatchlist(); }));
+  box.querySelectorAll('[data-unwatch]').forEach((b) => b.addEventListener('click', () => toggleWatchlistById(b.getAttribute('data-unwatch'))));
+  tickCountdowns();
+}
+
+function watchCardHTML(a) {
+  const img = primaryImage(a);
+  const count = state.bidCounts.get(a.id) || 0;
+  return `
+  <article class="card">
+    <div class="card-img">
+      <div class="ph">${esc(a.title)}</div>
+      ${img ? `<img src="${esc(img)}" alt="${esc(a.title)}" loading="lazy" onerror="this.classList.add('hidden')">` : ''}
+      ${statusPill(a)}
+      <button type="button" class="star-btn on" data-star="${esc(a.id)}" title="Hapus dari watchlist">&#9733;</button>
+    </div>
+    <div class="card-body">
+      <div class="card-cat">${esc(a.categories?.name || 'Tanpa Kategori')}</div>
+      <div class="card-title">${esc(a.title)}</div>
+      <div>${watchBadges(a)}</div>
+      <div class="card-row"><span>${Number(a.current_highest_bid || 0) > 0 ? 'Bid tertinggi' : 'Harga awal'}</span><span>${count} bid</span></div>
+      <div class="card-price">${rp(currentPrice(a))}</div>
+      <div class="card-row"><span>Berakhir dalam</span><span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></div>
+      <div style="display:flex;gap:8px;margin-top:auto">
+        <a class="btn btn-navy" style="flex:1" href="#/auction/${esc(a.slug)}">Lihat Lelang</a>
+        <button class="btn btn-light" type="button" data-unwatch="${esc(a.id)}">Hapus</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+/* ================= Auth ================= */
+let authMode = 'login';
+function openAuth(mode) {
+  setAuthMode(mode || 'login');
+  $('authModal').classList.remove('hidden');
+}
+function closeAuth() { $('authModal').classList.add('hidden'); }
+function setAuthMode(mode) {
+  authMode = mode;
+  const isLogin = mode === 'login';
+  $('tabLogin').classList.toggle('active', isLogin);
+  $('tabRegister').classList.toggle('active', !isLogin);
+  $('fieldName').classList.toggle('hidden', isLogin);
+  $('authTitle').textContent = isLogin ? 'Masuk ke LelangKu' : 'Daftar Akun LelangKu';
+  $('authSub').textContent = isLogin ? 'Masuk untuk memasang bid dan memakai watchlist.' : 'Buat akun gratis untuk mulai ikut lelang.';
+  $('authSubmit').textContent = isLogin ? 'Masuk' : 'Daftar';
+  $('authPassword').setAttribute('autocomplete', isLogin ? 'current-password' : 'new-password');
+  const m = $('authMsg'); m.className = 'auth-msg'; m.textContent = '';
+}
+function authMessage(ok, text) { const m = $('authMsg'); m.className = 'auth-msg ' + (ok ? 'ok' : 'err'); m.textContent = text; }
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = $('authEmail').value.trim();
+  const password = $('authPassword').value;
+  const btn = $('authSubmit');
+  btn.disabled = true; btn.textContent = 'Memproses…';
+  try {
+    if (authMode === 'login') {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { authMessage(false, error.message); return; }
+      authMessage(true, 'Berhasil masuk. Selamat ikut lelang!');
+      setTimeout(closeAuth, 600);
+    } else {
+      const name = $('authName').value.trim();
+      const { data, error } = await supabase.auth.signUp({
+        email, password,
+        options: name ? { data: { full_name: name } } : undefined,
+      });
+      if (error) { authMessage(false, error.message); return; }
+      if (data.session) {
+        authMessage(true, 'Akun berhasil dibuat dan Anda sudah masuk.');
+        setTimeout(closeAuth, 600);
+      } else {
+        authMessage(true, 'Akun berhasil dibuat. Silakan cek email Anda untuk verifikasi, lalu masuk.');
+      }
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = authMode === 'login' ? 'Masuk' : 'Daftar';
+  }
+}
+
+function renderAuthArea() {
+  const area = $('authArea');
+  if (state.user) {
+    const label = state.profile?.full_name || state.profile?.username || state.user.user_metadata?.full_name || state.user.email || 'Pengguna';
+    area.innerHTML = `
+      <a class="balance-chip" id="walletChip" href="#/wallet" title="Buka Wallet">&#128176; <b>Rp0</b>&nbsp;tersedia</a>
+      <span class="user-chip" title="${esc(state.user.email || '')}">&#128100; <b>${esc(label)}</b></span>
+      <button class="btn btn-outline btn-sm" id="btnLogout" type="button">Keluar</button>`;
+    renderWalletChip();
+    $('btnLogout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      toast('Anda sudah keluar');
+    });
+  } else {
+    area.innerHTML = `
+      <button class="btn btn-outline btn-sm" id="btnLogin" type="button">Masuk</button>
+      <button class="btn btn-gold btn-sm" id="btnRegister" type="button">Daftar</button>`;
+    $('btnLogin').addEventListener('click', () => openAuth('login'));
+    $('btnRegister').addEventListener('click', () => openAuth('register'));
+  }
+}
+
+/* ================= Dialog konfirmasi generik ================= */
+let confirmResolve = null;
+function openConfirm({ title, body = '', extraHTML = '', needReason = false, reasonRequired = false, okLabel = 'Konfirmasi' }) {
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    $('confirmTitle').textContent = title;
+    $('confirmBody').textContent = body;
+    $('confirmExtra').innerHTML = extraHTML;
+    $('confirmReasonWrap').classList.toggle('hidden', !needReason);
+    $('confirmReason').value = '';
+    $('confirmReason').placeholder = reasonRequired ? 'Alasan (wajib diisi)' : 'Alasan (opsional)';
+    $('confirmOk').textContent = okLabel;
+    $('confirmModal').classList.remove('hidden');
+  });
+}
+function closeConfirm(result) {
+  $('confirmModal').classList.add('hidden');
+  if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(result); }
+}
+$('confirmCancel').addEventListener('click', () => closeConfirm(null));
+$('confirmClose').addEventListener('click', () => closeConfirm(null));
+$('confirmModal').addEventListener('click', (e) => { if (e.target === $('confirmModal')) closeConfirm(null); });
+$('confirmOk').addEventListener('click', () => {
+  const needReason = !$('confirmReasonWrap').classList.contains('hidden');
+  const reason = $('confirmReason').value.trim();
+  const extra = {};
+  $('confirmExtra').querySelectorAll('[data-cfield]').forEach((el) => { extra[el.getAttribute('data-cfield')] = el.value; });
+  closeConfirm({ reason: needReason ? reason : '', extra });
+});
+
+/* ================= Admin ================= */
+function renderAdminGate() {
+  const box = $('adminContent');
+  if (!state.user) { box.innerHTML = '<div class="state-box"><b>Masuk sebagai admin</b>Halaman ini hanya untuk pengguna dengan peran admin.</div>'; return; }
+  if (!state.isAdmin) { box.innerHTML = '<div class="state-box"><b>Bukan akun admin</b>Akun Anda tidak memiliki peran admin. Peran diatur lewat database oleh pemilik platform.</div>'; return; }
+  loadAdmin();
+}
+
+async function loadAdmin() {
+  const box = $('adminContent');
+  const tabs = [['live', 'Live Control'], ['wallets', 'Wallet Management'], ['create', 'Buat Lelang'], ['bids', 'Monitoring Bid']];
+  box.innerHTML = `<div class="admin-layout">
+    <div class="admin-side">${tabs.map(([k, l]) => `<button type="button" data-atab="${k}" class="${state.adminTab === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+    <div id="adminPanel"><div class="skel" style="aspect-ratio:16/6"></div></div>
+  </div>`;
+  box.querySelectorAll('[data-atab]').forEach((b) => b.addEventListener('click', () => { state.adminTab = b.getAttribute('data-atab'); loadAdmin(); }));
+  if (state.adminTab === 'live') renderAdminLive();
+  else if (state.adminTab === 'wallets') renderAdminWallets();
+  else if (state.adminTab === 'create') renderAdminCreate();
+  else renderAdminBids();
+}
+
+/* ---------- Admin: Live Control ---------- */
+async function renderAdminLive() {
+  const panel = $('adminPanel'); if (!panel) return;
+  const live = state.auctions.filter((a) => ['live', 'paused'].includes(String(a.status).toLowerCase()));
+  const totalBidValue = state.auctions.reduce((s, a) => s + Number(a.current_highest_bid || 0), 0);
+  const endingSoon = live.filter((a) => new Date(a.end_time) - Date.now() < 3600000 && new Date(a.end_time) > new Date()).length;
+  // username penawar tertinggi
+  const hbIds = [...new Set(live.map((a) => a.highest_bidder_id).filter(Boolean))];
+  let hbMap = new Map();
+  if (hbIds.length) { const p = await supabase.from('profiles').select('id,username,full_name').in('id', hbIds); hbMap = new Map((p.data || []).map((x) => [x.id, x.username || x.full_name || 'Penawar'])); }
+  const stats = `
+    <div class="wallet-grid" style="margin:0 0 16px">
+      <div class="wallet-card"><span>Lelang Aktif (Live/Paused)</span><b>${live.length}</b></div>
+      <div class="wallet-card"><span>Total Bid</span><b>${state.totalBids || 0}</b></div>
+      <div class="wallet-card"><span>Total Nilai Bid Tertinggi</span><b>${rp(totalBidValue)}</b></div>
+      <div class="wallet-card"><span>Berakhir &lt; 1 Jam</span><b>${endingSoon}</b></div>
+    </div>`;
+  const rows = live.length ? live.map((a) => `
+    <tr class="clickable" data-admin-row="${esc(a.id)}">
+      <td>${primaryImage(a) ? `<img src="${esc(primaryImage(a))}" style="width:52px;height:40px;object-fit:cover;border-radius:8px" onerror="this.style.display='none'">` : ''}</td>
+      <td><b>${esc(a.title)}</b><br><span class="badge ${isLive(a) ? 'badge-live' : 'badge-sched'}">${esc(a.status)}</span></td>
+      <td>${rp(currentPrice(a))}<br><span style="color:var(--muted);font-size:13px">${a.highest_bidder_id ? esc(hbMap.get(a.highest_bidder_id) || 'Penawar') : 'Belum ada bid'}</span></td>
+      <td>${state.bidCounts.get(a.id) || 0}</td>
+      <td><span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></td>
+    </tr>`).join('') : '<tr><td colspan="5" style="color:var(--muted)">Tidak ada lelang Live/Paused saat ini.</td></tr>';
+  panel.innerHTML = stats + `
+    <div class="tbl-wrap"><table class="data"><thead><tr><th></th><th>Lelang</th><th>Bid Tertinggi</th><th>Bid</th><th>Sisa Waktu</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div id="adminDetail" style="margin-top:18px"></div>`;
+  panel.querySelectorAll('[data-admin-row]').forEach((r) => r.addEventListener('click', () => { state.adminAuctionId = r.getAttribute('data-admin-row'); renderAdminAuctionDetail(); }));
+  tickCountdowns();
+  if (state.adminAuctionId && live.some((a) => a.id === state.adminAuctionId)) renderAdminAuctionDetail();
+}
+
+function bidChartSVG(bidsAsc) {
+  if (!bidsAsc.length) return '<span style="color:var(--muted);font-size:13.5px">Belum ada aktivitas bid.</span>';
+  let s = 0; const vals = bidsAsc.map((b) => (s += Number(b.amount)));
+  const min = Math.min(...vals, 0), max = Math.max(...vals, 1), range = (max - min) || 1;
+  const coords = vals.map((v, i) => `${(vals.length === 1 ? 200 : (i / (vals.length - 1)) * 400)},${64 - ((v - min) / range) * 54}`).join(' ');
+  return `<svg width="400" height="72" viewBox="0 0 400 72" style="max-width:100%"><polyline points="${coords}" fill="none" stroke="#D6A84F" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+}
+
+async function renderAdminAuctionDetail() {
+  const wrap = $('adminDetail'); if (!wrap) return;
+  const a = state.auctions.find((x) => x.id === state.adminAuctionId);
+  if (!a) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>';
+  const { data: bids } = await supabase.from('bids').select('id,bidder_id,amount,bid_sequence,created_at,profiles(username,full_name)').eq('auction_id', a.id).order('created_at', { ascending: false });
+  const bidList = bids || [];
+  let actions = [];
+  const actRes = await supabase.from('auction_admin_actions').select('*').eq('auction_id', a.id).order('created_at', { ascending: false }).limit(30);
+  if (!actRes.error) actions = actRes.data || [];
+  state.adminActions = actions;
+  const bidsAsc = [...bidList].reverse();
+  const fmtD = (d) => new Date(d).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  wrap.innerHTML = `
+  <div class="form-sec">
+    <h3>${esc(a.title)}</h3>
+    <p class="sub">Status: <b>${esc(a.status)}</b> &middot; Kategori: ${esc(a.categories?.name || '-')} &middot; Harga awal ${rp(a.starting_price)} &middot; Kelipatan ${rp(a.minimum_increment)}${a.reserve_price ? ' &middot; Reserve ' + rp(a.reserve_price) : ''}</p>
+    <div class="kv">
+      <div><span>Bid Tertinggi</span><b>${rp(currentPrice(a))}</b></div>
+      <div><span>Jumlah Bid</span><b>${bidList.length}</b></div>
+      <div><span>Mulai</span><b style="font-size:14px">${fmtD(a.start_time)}</b></div>
+      <div><span>Berakhir</span><b style="font-size:14px">${fmtD(a.actual_end_time || a.end_time)}</b></div>
+    </div>
+    <p>Sisa waktu: <span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></p>
+    <div class="chart-box" style="margin:14px 0"><b>Aktivitas Bid (kumulatif)</b><div>${bidChartSVG(bidsAsc)}</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">
+      <button class="btn btn-navy btn-sm" data-act="end">Akhiri Sekarang</button>
+      <button class="btn btn-light btn-sm" data-act="extend">Perpanjang</button>
+      <button class="btn btn-light btn-sm" data-act="pause">Jeda</button>
+      <button class="btn btn-light btn-sm" data-act="resume">Lanjutkan</button>
+      <button class="btn btn-sm" data-act="cancel" style="background:var(--red);color:#fff">Batalkan Lelang</button>
+    </div>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-bottom:8px">Riwayat Bid Live</h3>
+        <div class="tbl-wrap"><table class="data" style="min-width:0"><thead><tr><th>Penawar</th><th>Jumlah</th><th>Waktu</th></tr></thead>
+        <tbody>${bidList.length ? bidList.map((b) => `<tr><td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}${a.highest_bidder_id === b.bidder_id && Number(b.amount) === Number(a.current_highest_bid) ? ' <span class="badge badge-win">Pemimpin</span>' : ''}</td><td><b>${rp(b.amount)}</b></td><td>${fmtD(b.created_at)}</td></tr>`).join('') : '<tr><td colspan="3" style="color:var(--muted)">Belum ada bid.</td></tr>'}</tbody></table></div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">Timeline Aktivitas Admin</h3>
+        ${actions.length ? actions.map((x) => `<div style="border-left:3px solid var(--gold);padding:6px 0 6px 12px;margin-bottom:8px"><b>${esc(x.action_type || x.action || 'Aksi admin')}</b><br><span style="color:var(--muted);font-size:13px">${esc(x.reason || x.description || '')} &middot; ${fmtD(x.created_at)}</span></div>`).join('') : '<p style="color:var(--muted);font-size:14px">Belum ada aksi admin untuk lelang ini.</p>'}
+      </div>
+    </div>
+  </div>`;
+  wrap.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => adminAuctionAction(a, b.getAttribute('data-act'))));
+  tickCountdowns();
+}
+
+async function adminAuctionAction(a, kind) {
+  const meta = {
+    end: { rpc: 'admin_end_auction', title: 'Akhiri Lelang Sekarang', ok: 'Akhiri Lelang' },
+    pause: { rpc: 'admin_pause_auction', title: 'Jeda Lelang', ok: 'Jeda Lelang' },
+    resume: { rpc: 'admin_resume_auction', title: 'Lanjutkan Lelang', ok: 'Lanjutkan' },
+    cancel: { rpc: 'admin_cancel_auction', title: 'Batalkan Lelang', ok: 'Batalkan Lelang' },
+    extend: { rpc: 'admin_extend_auction', title: 'Perpanjang Lelang', ok: 'Perpanjang' },
+  }[kind];
+  let extraHTML = '';
+  if (kind === 'extend') {
+    extraHTML = `<div class="field"><label>Tambahan waktu</label>
+      <div class="seg" id="extSeg">${[1, 2, 5, 10, 30].map((m) => `<button type="button" data-ext="${m}" class="${m === 10 ? 'active' : ''}">+${m} menit</button>`).join('')}</div>
+      <input type="number" id="extCustom" data-cfield="minutes" value="10" min="1" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;margin-top:10px"> menit</div>`;
+  }
+  const confirmPromise = openConfirm({ title: meta.title, body: `Lelang: ${a.title} (status ${a.status}). Tindakan ini tercatat di timeline aktivitas admin.`, extraHTML, needReason: true, reasonRequired: kind === 'cancel', okLabel: meta.ok });
+  if (kind === 'extend') {
+    $('confirmExtra').querySelectorAll('[data-ext]').forEach((b) => b.addEventListener('click', () => {
+      $('confirmExtra').querySelectorAll('[data-ext]').forEach((x) => x.classList.toggle('active', x === b));
+      const inp = $('confirmExtra').querySelector('[data-cfield="minutes"]'); if (inp) inp.value = b.getAttribute('data-ext');
+    }));
+  }
+  const res = await confirmPromise;
+  if (!res) return;
+  if (kind === 'cancel' && !res.reason) { toast('Alasan wajib diisi untuk membatalkan lelang'); return; }
+  let rpcRes;
+  if (kind === 'extend') {
+    const minutes = Number(res.extra.minutes) || 10;
+    rpcRes = await supabase.rpc('admin_extend_auction', { p_auction_id: a.id, p_minutes: minutes, p_reason: res.reason || null });
+  } else {
+    rpcRes = await supabase.rpc(meta.rpc, { p_auction_id: a.id, p_reason: res.reason || null });
+  }
+  if (rpcRes.error) { toast('Gagal: ' + rpcRes.error.message); return; }
+  const d = rpcRes.data;
+  if (d && d.success === false) { toast('Gagal: ' + (d.error || 'aksi ditolak')); return; }
+  toast('Aksi admin berhasil diterapkan');
+  await loadData(false);
+  renderAdminLive();
+}
+
+/* ---------- Admin: Wallet Management ---------- */
+async function renderAdminWallets() {
+  const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+  const { data: wallets, error } = await supabase.from('wallets').select('*,profiles(username,full_name,email)').order('updated_at', { ascending: false });
+  if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat wallet</b>${esc(error.message)}</div>`; return; }
+  state.adminWallets = wallets || [];
+  const { data: gtx } = await supabase.from('wallet_transactions').select('*,profiles(username,full_name)').order('created_at', { ascending: false }).limit(20);
+  state.adminGlobalTxs = gtx || [];
+  drawAdminWallets();
+}
+function drawAdminWallets() {
+  const panel = $('adminPanel'); if (!panel) return;
+  const wallets = state.adminWallets;
+  const totalAvail = wallets.reduce((s, w) => s + Number(w.available_balance || 0), 0);
+  const totalResv = wallets.reduce((s, w) => s + Number(w.reserved_balance || 0), 0);
+  const q = (panel.querySelector('#adminWalletSearch')?.value || '').toLowerCase();
+  const list = wallets.filter((w) => !q || `${w.profiles?.full_name || ''} ${w.profiles?.username || ''} ${w.profiles?.email || ''}`.toLowerCase().includes(q));
+  const lastTx = new Map();
+  state.adminGlobalTxs.forEach((t) => { if (!lastTx.has(t.wallet_id)) lastTx.set(t.wallet_id, t); });
+  panel.innerHTML = `
+    <div class="wallet-hero" style="margin-top:0">
+      <span style="color:var(--muted);font-weight:600">Total Balance — Semua Wallet</span>
+      <div class="bal">${rp(totalAvail + totalResv)}</div>
+      <p style="color:var(--muted)">Tersedia ${rp(totalAvail)} &middot; Tertahan ${rp(totalResv)} &middot; ${wallets.length} wallet</p>
+    </div>
+    <div style="display:flex;gap:10px;margin:18px 0;flex-wrap:wrap;align-items:center">
+      <input type="search" id="adminWalletSearch" placeholder="Cari nama / username / email…" value="${esc(q)}" style="padding:11px 14px;border:1px solid var(--line);border-radius:10px;min-width:260px;flex:1">
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>Pengguna</th><th>Tersedia</th><th>Tertahan</th><th>Total</th><th>Status</th><th>Transaksi Terakhir</th><th>Aksi</th></tr></thead>
+    <tbody>${list.length ? list.map((w) => { const lt = lastTx.get(w.id); return `<tr>
+      <td><b>${esc(w.profiles?.full_name || w.profiles?.username || 'Pengguna')}</b><br><span style="color:var(--muted);font-size:13px">@${esc(w.profiles?.username || '-')} &middot; ${esc(w.profiles?.email || '')}</span></td>
+      <td>${rp(w.available_balance)}</td><td>${rp(w.reserved_balance)}</td><td><b>${rp(Number(w.available_balance) + Number(w.reserved_balance))}</b></td>
+      <td><span class="badge badge-watch">${esc(w.status || 'active')}</span></td>
+      <td style="font-size:13px;color:var(--muted)">${lt ? esc(lt.description || txTypeLabel(lt)) + ' &middot; ' + new Date(lt.created_at).toLocaleDateString('id-ID') : 'Belum ada'}</td>
+      <td style="white-space:nowrap"><button class="btn btn-gold btn-sm" data-wadd="${esc(w.user_id)}">Tambah Saldo</button> <button class="btn btn-light btn-sm" data-wded="${esc(w.user_id)}">Kurangi Saldo</button></td>
+    </tr>`; }).join('') : '<tr><td colspan="7" style="color:var(--muted)">Tidak ada wallet yang cocok.</td></tr>'}</tbody></table></div>
+    <h3 style="margin:22px 0 10px">Transaksi Wallet Terbaru (Semua Pengguna)</h3>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>Waktu</th><th>Pengguna</th><th>Deskripsi</th><th>Jumlah</th><th>Status</th></tr></thead>
+    <tbody>${state.adminGlobalTxs.length ? state.adminGlobalTxs.map((t) => `<tr><td>${new Date(t.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td><td>${esc(t.profiles?.username || t.profiles?.full_name || '-')}</td><td>${esc(t.description || txTypeLabel(t))}</td><td class="${Number(t.amount) >= 0 ? 'amt-pos' : 'amt-neg'}">${Number(t.amount) >= 0 ? '+' : ''}${rp(t.amount)}</td><td>${esc(t.status || 'completed')}</td></tr>`).join('') : '<tr><td colspan="5" style="color:var(--muted)">Belum ada transaksi wallet.</td></tr>'}</tbody></table></div>`;
+  const searchEl = panel.querySelector('#adminWalletSearch');
+  searchEl.addEventListener('input', () => { const v = searchEl.value; drawAdminWallets(); const n = panel.querySelector('#adminWalletSearch'); n.focus(); n.setSelectionRange(v.length, v.length); });
+  panel.querySelectorAll('[data-wadd]').forEach((b) => b.addEventListener('click', () => adminWalletAdjust(b.getAttribute('data-wadd'), 'add')));
+  panel.querySelectorAll('[data-wded]').forEach((b) => b.addEventListener('click', () => adminWalletAdjust(b.getAttribute('data-wded'), 'deduct')));
+}
+
+async function adminWalletAdjust(userId, mode) {
+  const w = state.adminWallets.find((x) => x.user_id === userId);
+  if (!w) return;
+  const name = w.profiles?.full_name || w.profiles?.username || 'Pengguna';
+  const isAdd = mode === 'add';
+  const confirmPromise = openConfirm({
+    title: isAdd ? 'Tambah Saldo Wallet' : 'Kurangi Saldo Wallet',
+    body: `${name} — saldo tersedia saat ini ${rp(w.available_balance)}, tertahan ${rp(w.reserved_balance)}.`,
+    extraHTML: `
+      <div class="field"><label>Jumlah (Rp)</label><input type="number" data-cfield="amount" min="1" placeholder="mis. 1000000" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px"></div>
+      <div class="field"><label>Referensi (opsional)</label><input type="text" data-cfield="reference" placeholder="No. referensi / catatan transfer" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px"></div>
+      <p style="font-size:13.5px;color:var(--muted)" id="walletPreview"></p>`,
+    needReason: true, reasonRequired: !isAdd, okLabel: isAdd ? 'Tambah Saldo' : 'Kurangi Saldo',
+  });
+  const amtInput = document.querySelector('#confirmExtra [data-cfield="amount"]');
+  if (amtInput) amtInput.addEventListener('input', () => {
+    const v = Number(amtInput.value) || 0;
+    const prev = document.getElementById('walletPreview');
+    if (prev) prev.textContent = v > 0 ? `Pratinjau saldo tersedia baru: ${rp(isAdd ? Number(w.available_balance) + v : Number(w.available_balance) - v)}` : '';
+  });
+  const res = await confirmPromise;
+  if (!res) return;
+  const amount = Number(res.extra.amount);
+  if (!amount || amount <= 0) { toast('Masukkan jumlah yang valid'); return; }
+  if (!isAdd && !res.reason) { toast('Alasan wajib diisi untuk mengurangi saldo'); return; }
+  const deskripsi = res.reason || (isAdd ? 'Penambahan saldo oleh admin' : 'Pengurangan saldo oleh admin');
+  const rpc = isAdd ? 'admin_add_wallet_balance' : 'admin_deduct_wallet_balance';
+  const { data, error } = await supabase.rpc(rpc, { p_user_id: userId, p_amount: amount, p_description: deskripsi, p_reference: res.extra.reference || null, p_idempotency_key: crypto.randomUUID() });
+  if (error) { toast('Gagal: ' + error.message); return; }
+  if (data && data.success === false) { toast('Gagal: ' + (data.error || 'transaksi ditolak')); return; }
+  toast(isAdd ? 'Saldo berhasil ditambahkan' : 'Saldo berhasil dikurangi');
+  if (userId === state.user.id) loadWallet();
+  renderAdminWallets();
+}
+
+/* ---------- Admin: Buat Lelang ---------- */
+function renderAdminCreate() {
+  const panel = $('adminPanel'); if (!panel) return;
+  const catOpts = state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  const presets = [[5, '5m'], [10, '10m'], [15, '15m'], [30, '30m'], [60, '1j'], [120, '2j'], [180, '3j'], [360, '6j'], [720, '12j'], [1440, '24j'], [2880, '2 hari'], [4320, '3 hari'], [10080, '7 hari']];
+  panel.innerHTML = `
+  <form id="createForm">
+    <div class="two-col">
+      <div>
+        <div class="form-sec"><h3>A — Info Barang</h3><p class="sub">Detail barang yang dilelang.</p>
+          <div class="field"><label>Judul *</label><input id="cfTitle" required placeholder="mis. MacBook Pro 14 inci"></div>
+          <div class="form-grid">
+            <div class="field"><label>Kategori *</label><select id="cfCategory">${catOpts}</select></div>
+            <div class="field"><label>Kondisi</label><input id="cfCondition" placeholder="Baru / Bekas - Baik"></div>
+          </div>
+          <div class="field"><label>Deskripsi</label><textarea id="cfDesc" rows="4" placeholder="Deskripsikan barang, kelengkapan, dan catatan penting…"></textarea></div>
+          <div class="form-grid">
+            <div class="field"><label>Lokasi</label><input id="cfLocation" placeholder="mis. Jakarta"></div>
+            <div class="field"><label>URL Gambar</label><input id="cfImage" type="url" placeholder="https://…"></div>
+          </div>
+          <label style="display:flex;gap:8px;align-items:center;font-size:14.5px"><input type="checkbox" id="cfFeatured"> Tandai sebagai Featured</label>
+        </div>
+        <div class="form-sec"><h3>B — Pricing</h3><p class="sub">Base Price adalah harga mulai bid; Reserve Price adalah target harga tersembunyi (opsional).</p>
+          <div class="form-grid">
+            <div class="field"><label>Base / Starting Price (Rp) *</label><input id="cfStart" type="number" min="0" required placeholder="1000000"></div>
+            <div class="field"><label>Minimum Increment (Rp) *</label><input id="cfInc" type="number" min="1" value="50000" required></div>
+            <div class="field"><label>Reserve Price (Rp, opsional)</label><input id="cfReserve" type="number" min="0" placeholder="Boleh kosong"></div>
+            <div class="field"><label>Buy Now Price (Rp, opsional)</label><input id="cfBuyNow" type="number" min="0" placeholder="Boleh kosong"></div>
+          </div>
+        </div>
+        <div class="form-sec"><h3>C — Jadwal</h3><p class="sub">Pilih metode: rentang From–To, atau mulai + durasi preset. Zona waktu Asia/Jakarta.</p>
+          <div class="seg" style="margin-bottom:14px">
+            <button type="button" data-sched="range" class="active">From &amp; To</button>
+            <button type="button" data-sched="duration">Mulai + Durasi</button>
+          </div>
+          <div id="schedRange" class="form-grid">
+            <div class="field"><label>From (mulai) *</label><input id="cfFrom" type="datetime-local"></div>
+            <div class="field"><label>To (selesai) *</label><input id="cfTo" type="datetime-local"></div>
+          </div>
+          <div id="schedDuration" class="hidden">
+            <div class="field"><label>Mulai</label><input id="cfStartAt" type="datetime-local"></div>
+            <div class="seg" id="durSeg">${presets.map(([m, l], i) => `<button type="button" data-dur="${m}" class="${m === 1440 ? 'active' : ''}">${l}</button>`).join('')}<button type="button" data-dur="custom">Custom</button></div>
+            <div class="field" style="margin-top:12px"><label>Durasi custom (menit)</label><input id="cfDurCustom" type="number" min="1" placeholder="Hanya bila memilih Custom"></div>
+          </div>
+          <p style="font-size:14px;margin-top:12px">Waktu selesai otomatis: <b id="cfEndPreview">—</b></p>
+        </div>
+        <div class="form-sec"><h3>D — Pengaturan</h3><p class="sub">Anti-sniping memperpanjang lelang otomatis bila ada bid di detik-detik akhir.</p>
+          <label style="display:flex;gap:8px;align-items:center;font-size:14.5px"><input type="checkbox" id="cfSnipe" checked> Anti-sniping aktif</label>
+          <div class="form-grid" style="margin-top:12px">
+            <div class="field"><label>Threshold (detik)</label><input id="cfThreshold" type="number" min="0" value="30"></div>
+            <div class="field"><label>Durasi ekstensi (detik)</label><input id="cfExtDur" type="number" min="1" value="120"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="form-sec" style="position:sticky;top:84px"><h3>Product Details</h3><p class="sub">Ringkasan langsung dari form Anda.</p>
+          <div id="cfSummary" style="font-size:14.5px;line-height:1.9"></div>
+          <div class="field" style="margin-top:14px"><label>Publikasi</label>
+            <select id="cfPublish"><option value="auto">Otomatis (ikuti waktu mulai)</option><option value="draft">Simpan sebagai Draft</option><option value="now">Publish Immediately (mulai sekarang)</option></select></div>
+          <button class="btn btn-gold btn-block" type="submit" style="margin-top:10px">Buat Lelang</button>
+          <div class="bid-msg" id="cfMsg"></div>
+        </div>
+      </div>
+    </div>
+  </form>`;
+
+  let schedMode = 'range'; let durMinutes = 1440;
+  const fmtJakarta = (d) => isNaN(d) ? '—' : d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }) + ' WIB';
+  const computeTimes = () => {
+    let start, end;
+    if (schedMode === 'range') { start = new Date($('cfFrom').value); end = new Date($('cfTo').value); }
+    else {
+      start = $('cfStartAt').value ? new Date($('cfStartAt').value) : new Date();
+      const mins = durMinutes === 'custom' ? Number($('cfDurCustom').value) || 0 : durMinutes;
+      end = new Date(start.getTime() + mins * 60000);
+    }
+    return { start, end };
+  };
+  const updateSummary = () => {
+    const { start, end } = computeTimes();
+    $('cfEndPreview').textContent = fmtJakarta(end);
+    $('cfSummary').innerHTML = `
+      <div>Judul: <b>${esc($('cfTitle').value || '—')}</b></div>
+      <div>Kategori: <b>${esc(state.categories.find((c) => c.id === $('cfCategory').value)?.name || '—')}</b></div>
+      <div>Base Price: <b>${rp(Number($('cfStart').value) || 0)}</b></div>
+      <div>Kelipatan: <b>${rp(Number($('cfInc').value) || 0)}</b></div>
+      <div>Reserve: <b>${$('cfReserve').value ? rp(Number($('cfReserve').value)) : '—'}</b></div>
+      <div>Mulai: <b>${fmtJakarta(start)}</b></div>
+      <div>Selesai: <b>${fmtJakarta(end)}</b></div>`;
+  };
+  panel.querySelectorAll('[data-sched]').forEach((b) => b.addEventListener('click', () => {
+    schedMode = b.getAttribute('data-sched');
+    panel.querySelectorAll('[data-sched]').forEach((x) => x.classList.toggle('active', x === b));
+    $('schedRange').classList.toggle('hidden', schedMode !== 'range');
+    $('schedDuration').classList.toggle('hidden', schedMode !== 'duration');
+    updateSummary();
+  }));
+  panel.querySelectorAll('[data-dur]').forEach((b) => b.addEventListener('click', () => {
+    durMinutes = b.getAttribute('data-dur') === 'custom' ? 'custom' : Number(b.getAttribute('data-dur'));
+    panel.querySelectorAll('[data-dur]').forEach((x) => x.classList.toggle('active', x === b));
+    updateSummary();
+  }));
+  panel.querySelectorAll('input,select,textarea').forEach((el) => { el.addEventListener('input', updateSummary); el.addEventListener('change', updateSummary); });
+  // default From = sekarang, To = +1 hari
+  const pad = (n) => String(n).padStart(2, '0');
+  const toLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  $('cfFrom').value = toLocal(new Date()); $('cfTo').value = toLocal(new Date(Date.now() + 86400000)); $('cfStartAt').value = toLocal(new Date());
+  updateSummary();
+
+  $('createForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { start, end } = computeTimes();
+    const msg = $('cfMsg');
+    const show = (ok, t) => { msg.className = 'bid-msg ' + (ok ? 'ok' : 'err'); msg.textContent = t; };
+    if (isNaN(start) || isNaN(end) || end <= start) { show(false, 'Waktu selesai harus setelah waktu mulai.'); return; }
+    const pub = $('cfPublish').value;
+    let status = 'Scheduled'; let finalStart = start;
+    if (pub === 'draft') status = 'Draft';
+    else if (pub === 'now') { status = 'Live'; finalStart = new Date(); }
+    else status = start > new Date() ? 'Scheduled' : 'Live';
+    const summary = `${$('cfTitle').value} — Base ${rp(Number($('cfStart').value))}, selesai ${fmtJakarta(end)}, status ${status}.`;
+    const conf = await openConfirm({ title: 'Buat Lelang Baru?', body: summary, okLabel: 'Ya, Buat Lelang' });
+    if (!conf) return;
+    const payload = {
+      seller_id: state.user.id,
+      category_id: $('cfCategory').value || null,
+      title: $('cfTitle').value.trim(),
+      slug: $('cfTitle').value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + Date.now().toString(36),
+      description: $('cfDesc').value.trim() || null,
+      condition: $('cfCondition').value.trim() || null,
+      location: $('cfLocation').value.trim() || null,
+      starting_price: Number($('cfStart').value) || 0,
+      minimum_increment: Number($('cfInc').value) || 1,
+      reserve_price: $('cfReserve').value ? Number($('cfReserve').value) : null,
+      buy_now_price: $('cfBuyNow').value ? Number($('cfBuyNow').value) : null,
+      start_time: finalStart.toISOString(),
+      end_time: end.toISOString(),
+      status,
+      is_featured: $('cfFeatured').checked,
+      anti_sniping_enabled: $('cfSnipe').checked,
+      extension_threshold_seconds: Number($('cfThreshold').value) || 30,
+      extension_duration_seconds: Number($('cfExtDur').value) || 120,
+    };
+    const { data, error } = await supabase.from('auctions').insert(payload).select('id').single();
+    if (error) { show(false, 'Gagal membuat lelang: ' + error.message); return; }
+    if ($('cfImage').value.trim()) {
+      await supabase.from('auction_images').insert({ auction_id: data.id, image_url: $('cfImage').value.trim(), is_primary: true, sort_order: 0 });
+    }
+    show(true, 'Lelang berhasil dibuat dengan status ' + status + '.');
+    toast('Lelang berhasil dibuat');
+    await loadData(false);
+  });
+}
+
+/* ---------- Admin: Monitoring Bid ---------- */
+async function renderAdminBids() {
+  const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+  let bids = [];
+  const res = await supabase.from('bids').select('id,auction_id,bidder_id,amount,bid_sequence,created_at,profiles(username,full_name),auctions(title,slug,current_highest_bid)').order('created_at', { ascending: false }).limit(200);
+  if (!res.error) bids = res.data || [];
+  else {
+    const raw = await supabase.from('bids').select('id,auction_id,bidder_id,amount,bid_sequence,created_at').order('created_at', { ascending: false }).limit(200);
+    bids = raw.data || [];
+    const uids = [...new Set(bids.map((b) => b.bidder_id))];
+    const prof = uids.length ? await supabase.from('profiles').select('id,username,full_name').in('id', uids) : { data: [] };
+    const pmap = new Map((prof.data || []).map((p) => [p.id, p]));
+    bids = bids.map((b) => ({ ...b, profiles: pmap.get(b.bidder_id) || null, auctions: state.auctions.find((a) => a.id === b.auction_id) || null }));
+  }
+  state.adminBids = bids;
+  const draw = () => {
+    const fAuc = panel.querySelector('#monAuction')?.value || '';
+    const q = (panel.querySelector('#monSearch')?.value || '').toLowerCase();
+    const list = bids.filter((b) => (!fAuc || b.auction_id === fAuc) && (!q || (b.profiles?.username || b.profiles?.full_name || '').toLowerCase().includes(q)));
+    const tbody = panel.querySelector('#monBody');
+    tbody.innerHTML = list.length ? list.map((b) => `
+      <tr><td>${b.bid_sequence != null ? '#' + esc(b.bid_sequence) : '—'}</td>
+      <td><a href="#/auction/${esc(b.auctions?.slug || '')}"><b>${esc(b.auctions?.title || 'Lelang')}</b></a>${Number(b.auctions?.current_highest_bid) === Number(b.amount) ? ' <span class="badge badge-win">Pemimpin saat ini</span>' : ''}</td>
+      <td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}</td>
+      <td><b>${rp(b.amount)}</b></td>
+      <td>${new Date(b.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('')
+      : '<tr><td colspan="5" style="color:var(--muted)">Tidak ada bid yang cocok.</td></tr>';
+  };
+  panel.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <select id="monAuction" style="padding:11px 12px;border:1px solid var(--line);border-radius:10px"><option value="">Semua Lelang</option>${state.auctions.map((a) => `<option value="${esc(a.id)}">${esc(a.title)}</option>`).join('')}</select>
+      <input type="search" id="monSearch" placeholder="Cari username…" style="padding:11px 14px;border:1px solid var(--line);border-radius:10px;min-width:220px">
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>Seq</th><th>Lelang</th><th>Penawar</th><th>Jumlah</th><th>Waktu</th></tr></thead><tbody id="monBody"></tbody></table></div>`;
+  panel.querySelector('#monAuction').addEventListener('change', draw);
+  panel.querySelector('#monSearch').addEventListener('input', draw);
+  draw();
+}
+
+/* ================= Wallet ================= */
+async function loadWallet(silent = false) {
+  if (!state.user) { state.wallet = null; state.walletTxs = []; renderWalletChip(); return null; }
+  let { data: w } = await supabase.from('wallets').select('*').eq('user_id', state.user.id).maybeSingle();
+  if (!w) {
+    await supabase.rpc('create_user_wallet', { p_user_id: state.user.id });
+    const again = await supabase.from('wallets').select('*').eq('user_id', state.user.id).maybeSingle();
+    w = again.data;
+  }
+  state.wallet = w || null;
+  if (w) {
+    const tx = await supabase.from('wallet_transactions').select('*').eq('wallet_id', w.id).order('created_at', { ascending: false }).limit(500);
+    state.walletTxs = tx.data || [];
+  }
+  renderWalletChip();
+  if (!silent && currentView() === 'wallet') renderWallet();
+  return w;
+}
+
+function renderWalletChip() {
+  const chip = $('walletChip');
+  if (chip) {
+    if (state.user && state.wallet) chip.innerHTML = `&#128176; <b>${rp(state.wallet.available_balance)}</b>&nbsp;tersedia`;
+    else if (state.user) chip.innerHTML = '&#128176; <b>Rp0</b>&nbsp;tersedia';
+  }
+}
+
+function sparklineSVG(values, color) {
+  if (!values.length) return '<div style="color:var(--muted);font-size:13px">Belum ada data bulan ini</div>';
+  const pts = values.length === 1 ? [values[0], values[0]] : values;
+  const min = Math.min(...pts), max = Math.max(...pts), range = (max - min) || 1;
+  const coords = pts.map((v, i) => `${(i / (pts.length - 1)) * 160},${34 - ((v - min) / range) * 28}`).join(' ');
+  return `<svg width="160" height="40" viewBox="0 0 160 40" preserveAspectRatio="none"><polyline points="${coords}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+}
+
+function lineChartSVG(txsAsc) {
+  // Kumulatif saldo (available+reserved) dari riwayat, urut lama -> baru
+  if (!txsAsc.length) return '<div class="state-box"><b>Belum ada aktivitas wallet</b>Grafik saldo akan muncul setelah ada transaksi pertama.</div>';
+  let bal = 0;
+  const ptsVal = txsAsc.map((t) => {
+    bal = Number(t.available_balance_after ?? bal) + Number(t.reserved_balance_after ?? 0);
+    return bal;
+  });
+  const min = Math.min(...ptsVal, 0), max = Math.max(...ptsVal, 1), range = (max - min) || 1;
+  const W = 860, H = 180, pad = 8;
+  const coords = ptsVal.map((v, i) => `${pad + (ptsVal.length === 1 ? W / 2 : (i / (ptsVal.length - 1)) * (W - pad * 2))},${H - pad - ((v - min) / range) * (H - pad * 2)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Grafik saldo wallet">
+    <polyline points="${coords}" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linejoin="round"/>
+    <text x="${pad}" y="14" font-size="12" fill="#667085">Tertinggi ${rp(max)}</text>
+    <text x="${pad}" y="${H - 2}" font-size="12" fill="#667085">Terendah ${rp(min)}</text></svg>`;
+}
+
+function txTypeLabel(t) {
+  const m = { deposit: 'Top Up', admin_credit: 'Penambahan Admin', admin_deduction: 'Pengurangan Admin', bid_reserve: 'Saldo Tertahan Bid', bid_release: 'Pelepasan Bid', bid_payment: 'Pembayaran Lelang', refund: 'Refund', withdrawal: 'Penarikan' };
+  return m[t.transaction_type] || (t.transaction_type || 'Transaksi');
+}
+function isAdminTx(t) { return String(t.transaction_type || '').startsWith('admin') || !!t.performed_by; }
+function isAuctionTx(t) { return !!t.related_auction_id || ['bid_reserve', 'bid_release', 'bid_payment'].includes(t.transaction_type); }
+
+function renderWallet() {
+  const box = $('walletContent');
+  if (!state.user) {
+    box.innerHTML = `<div class="state-box"><b>Masuk untuk melihat wallet Anda</b>Wallet menyimpan saldo tersedia untuk bid dan saldo tertahan untuk bid yang sedang memimpin.<br><br>
+      <button class="btn btn-gold" type="button" onclick="document.getElementById('btnLogin')?.click()">Masuk / Daftar</button></div>`;
+    return;
+  }
+  const w = state.wallet;
+  if (!w) { box.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>'; loadWallet(); return; }
+  const avail = Number(w.available_balance || 0), resv = Number(w.reserved_balance || 0), total = avail + resv;
+  const txsAsc = [...state.walletTxs].reverse();
+  const now = new Date();
+  const monthTxs = state.walletTxs.filter((t) => { const d = new Date(t.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+  const inSum = monthTxs.filter((t) => Number(t.amount) > 0).reduce((s, t) => s + Number(t.amount), 0);
+  const outSum = monthTxs.filter((t) => Number(t.amount) < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+  const cum = (arr) => { let s = 0; return arr.map((t) => (s += Number(t.amount))); };
+  const inSpark = sparklineSVG(cum(monthTxs.filter((t) => Number(t.amount) > 0).reverse()), '#16A34A');
+  const outSpark = sparklineSVG(cum(monthTxs.filter((t) => Number(t.amount) < 0).reverse().map((t) => ({ ...t, amount: Math.abs(Number(t.amount)) }))), '#DC2626');
+
+  // Filter + pencarian + pagination
+  let list = state.walletTxs.filter((t) => {
+    if (state.walletFilter === 'masuk' && !(Number(t.amount) > 0)) return false;
+    if (state.walletFilter === 'keluar' && !(Number(t.amount) < 0)) return false;
+    if (state.walletFilter === 'lelang' && !isAuctionTx(t)) return false;
+    if (state.walletFilter === 'admin' && !isAdminTx(t)) return false;
+    if (state.walletSearch) {
+      const hay = `${t.description || ''} ${txTypeLabel(t)} ${t.reference_number || ''}`.toLowerCase();
+      if (!hay.includes(state.walletSearch.toLowerCase())) return false;
+    }
+    return true;
+  });
+  const perPage = 10;
+  const pages = Math.max(1, Math.ceil(list.length / perPage));
+  state.walletPage = Math.min(state.walletPage, pages);
+  const pageItems = list.slice((state.walletPage - 1) * perPage, state.walletPage * perPage);
+  const ftabs = [['semua', 'Semua'], ['masuk', 'Masuk'], ['keluar', 'Keluar'], ['lelang', 'Lelang'], ['admin', 'Admin']]
+    .map(([k, l]) => `<button type="button" class="${state.walletFilter === k ? 'active' : ''}" data-txfilter="${k}">${l}</button>`).join('');
+  const rows = pageItems.length ? pageItems.map((t) => `
+    <tr>
+      <td><b>${esc(t.description || txTypeLabel(t))}</b><br><span style="color:var(--muted);font-size:13px">${new Date(t.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}${t.reference_number ? ' &middot; Ref: ' + esc(t.reference_number) : ''}</span></td>
+      <td>Wallet</td>
+      <td>${esc(txTypeLabel(t))}</td>
+      <td><span class="badge ${t.status === 'completed' || !t.status ? 'badge-live' : 'badge-watch'}">${esc(t.status || 'completed')}</span></td>
+      <td class="${Number(t.amount) >= 0 ? 'amt-pos' : 'amt-neg'}">${Number(t.amount) >= 0 ? '+' : ''}${rp(t.amount)}</td>
+    </tr>`).join('') : '<tr><td colspan="5" style="color:var(--muted)">Tidak ada transaksi yang cocok dengan filter ini.</td></tr>';
+
+  box.innerHTML = `
+    <div class="wallet-hero">
+      <span style="color:var(--muted);font-weight:600">Wallet Balance</span>
+      <div class="bal">${rp(total)}</div>
+      <p style="color:var(--muted);font-size:13.5px">Status wallet: <b style="color:var(--text)">${esc(w.status || 'active')}</b></p>
+      <div class="wallet-grid">
+        <div class="wallet-card"><span>Saldo Tersedia</span><b style="color:var(--green)">${rp(avail)}</b><p style="color:var(--muted);font-size:13px">Siap dipakai untuk memasang bid.</p></div>
+        <div class="wallet-card"><span>Saldo Tertahan (Reserved)</span><b style="color:var(--gold-dark)">${rp(resv)}</b><p style="color:var(--muted);font-size:13px">Ditahan untuk bid Anda yang sedang memimpin.</p></div>
+        <div class="wallet-card"><span>Total Saldo</span><b>${rp(total)}</b><p style="color:var(--muted);font-size:13px">Tersedia + tertahan.</p></div>
+      </div>
+      <p style="color:var(--muted);font-size:12.5px;margin-top:14px">Catatan: saldo wallet adalah kredit yang dikelola oleh admin platform, bukan deposit tunai. Penambahan &amp; pengurangan saldo dilakukan oleh admin.</p>
+    </div>
+    <div class="chart-box"><b>Pergerakan Saldo</b><div style="margin-top:8px">${lineChartSVG(txsAsc)}</div></div>
+    <div class="wallet-grid">
+      <div class="wallet-card"><span>Masuk — ${now.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}</span><b class="amt-pos">${rp(inSum)}</b><div style="margin-top:6px">${inSpark}</div></div>
+      <div class="wallet-card"><span>Keluar — ${now.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}</span><b class="amt-neg">${rp(outSum)}</b><div style="margin-top:6px">${outSpark}</div></div>
+    </div>
+    <h2 style="margin:26px 0 12px;font-size:21px">Latest Wallet Transactions</h2>
+    <div class="ftabs">${ftabs}
+      <input type="search" id="walletSearch" placeholder="Cari transaksi…" value="${esc(state.walletSearch)}" style="padding:9px 13px;border:1px solid var(--line);border-radius:999px;min-width:200px">
+    </div>
+    <div class="tbl-wrap"><table class="data">
+      <thead><tr><th>Deskripsi</th><th>Metode</th><th>Tipe</th><th>Status</th><th>Jumlah</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+      <button class="btn btn-light btn-sm" id="txPrev" ${state.walletPage <= 1 ? 'disabled' : ''}>&larr; Sebelumnya</button>
+      <span style="color:var(--muted);font-size:14px">Halaman ${state.walletPage} dari ${pages} (${list.length} transaksi)</span>
+      <button class="btn btn-light btn-sm" id="txNext" ${state.walletPage >= pages ? 'disabled' : ''}>Berikutnya &rarr;</button>
+    </div>`;
+
+  box.querySelectorAll('[data-txfilter]').forEach((b) => b.addEventListener('click', () => { state.walletFilter = b.getAttribute('data-txfilter'); state.walletPage = 1; renderWallet(); }));
+  $('walletSearch').addEventListener('input', (e) => { state.walletSearch = e.target.value; state.walletPage = 1; renderWallet(); $('walletSearch')?.focus(); });
+  $('txPrev')?.addEventListener('click', () => { state.walletPage--; renderWallet(); });
+  $('txNext')?.addEventListener('click', () => { state.walletPage++; renderWallet(); });
+}
+
+function setupWalletRealtime() {
+  if (!state.user || state.walletChannel) return;
+  state.walletChannel = supabase.channel('wallet-live-' + state.user.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${state.user.id}` }, () => loadWallet(true).then(() => { if (currentView() === 'wallet') renderWallet(); }))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions', filter: `user_id=eq.${state.user.id}` }, () => loadWallet(true).then(() => { if (currentView() === 'wallet') renderWallet(); }))
+    .subscribe();
+}
+function teardownWalletRealtime() {
+  if (state.walletChannel) { supabase.removeChannel(state.walletChannel); state.walletChannel = null; }
+}
+
+/* ================= Profil & peran ================= */
+async function loadProfile() {
+  if (!state.user) { state.profile = null; state.isAdmin = false; updateNavRole(); return; }
+  const { data } = await supabase.from('profiles').select('id,username,full_name,email,role').eq('id', state.user.id).maybeSingle();
+  state.profile = data || null;
+  state.isAdmin = !!data && data.role === 'admin';
+  updateNavRole();
+}
+function updateNavRole() {
+  $('navWallet')?.classList.toggle('hidden', !state.user);
+  $('navAdmin')?.classList.toggle('hidden', !state.isAdmin);
+}
+
+/* ================= Realtime & routing ================= */
+function scheduleRefresh() {
+  clearTimeout(state.refreshTimer);
+  state.refreshTimer = setTimeout(async () => {
+    const slug = currentDetailSlug();
+    const view = currentView();
+    await loadData(false);
+    await loadUserCollections();
+    if (slug) await loadDetail(slug);
+    else if (view === 'watchlist') renderWatchlist();
+    else if (view === 'wallet') { await loadWallet(true); renderWallet(); }
+    else if (view === 'admin' && state.isAdmin) loadAdmin();
+  }, 400);
+}
+function setupRealtime() {
+  if (state.realtimeChannel) return;
+  state.realtimeChannel = supabase
+    .channel('lelangku-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'auctions' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, scheduleRefresh)
+    .subscribe();
+}
+// Cleanup sederhana saat halaman ditutup / disembunyikan
+window.addEventListener('beforeunload', () => {
+  if (state.realtimeChannel) supabase.removeChannel(state.realtimeChannel);
+});
+
+function currentDetailSlug() {
+  const m = location.hash.match(/^#\/auction\/(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function currentView() {
+  if (currentDetailSlug()) return 'detail';
+  const h = location.hash || '#/';
+  if (h.startsWith('#/watchlist')) return 'watchlist';
+  if (h.startsWith('#/wallet')) return 'wallet';
+  if (h.startsWith('#/admin')) return 'admin';
+  return 'home';
+}
+const ALL_VIEWS = ['homeView', 'detailView', 'watchlistView', 'walletView', 'adminView'];
+function showView(id) {
+  ALL_VIEWS.forEach((v) => $(v).classList.toggle('hidden', v !== id));
+}
+function route() {
+  const slug = currentDetailSlug();
+  const view = currentView();
+  if (slug) { showView('detailView'); loadDetail(slug); return; }
+  state.detail = null;
+  if (view === 'watchlist') { showView('watchlistView'); window.scrollTo({ top: 0 }); renderWatchlist(); }
+  else if (view === 'wallet') { showView('walletView'); window.scrollTo({ top: 0 }); renderWallet(); if (state.user && !state.wallet) loadWallet(); }
+  else if (view === 'admin') { showView('adminView'); window.scrollTo({ top: 0 }); renderAdminGate(); }
+  else {
+    showView('homeView');
+    if (state.auctions.length) tickCountdowns();
+  }
+}
+window.addEventListener('hashchange', route);
+
+/* ================= Event bindings ================= */
+$('year').textContent = new Date().getFullYear();
+$('hamburger').addEventListener('click', () => $('navLinks').classList.toggle('open'));
+$('navLinks').addEventListener('click', () => $('navLinks').classList.remove('open'));
+$('refreshLink').addEventListener('click', (e) => { e.preventDefault(); loadData(false); toast('Data dimuat ulang'); });
+$('btnRefresh').addEventListener('click', () => { loadData(false); toast('Data dimuat ulang'); });
+$('heroSearchForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  $('filterSearch').value = $('heroSearch').value;
+  renderMarketplace();
+  document.getElementById('marketplace').scrollIntoView({ behavior: 'smooth' });
+});
+$('filterSearch').addEventListener('input', () => { $('heroSearch').value = $('filterSearch').value; renderMarketplace(); });
+['filterCategory', 'filterStatus', 'filterSort'].forEach((id) => $(id).addEventListener('change', renderMarketplace));
+
+$('authClose').addEventListener('click', closeAuth);
+$('authModal').addEventListener('click', (e) => { if (e.target === $('authModal')) closeAuth(); });
+$('tabLogin').addEventListener('click', () => setAuthMode('login'));
+$('tabRegister').addEventListener('click', () => setAuthMode('register'));
+$('authForm').addEventListener('submit', handleAuthSubmit);
+$('btnLogin').addEventListener('click', () => openAuth('login'));
+$('btnRegister').addEventListener('click', () => openAuth('register'));
+
+/* ================= Init ================= */
+(async function init() {
+  skeletons(4, $('featuredGrid')); skeletons(4, $('liveGrid'));
+  skeletons(4, $('endingGrid')); skeletons(8, $('marketGrid'));
+  const { data } = await supabase.auth.getSession();
+  state.user = data.session?.user || null;
+  renderAuthArea();
+  if (state.user) { await loadProfile(); await loadUserCollections(); await loadWallet(true); renderAuthArea(); setupWalletRealtime(); }
+  supabase.auth.onAuthStateChange(async (_event, session) => {
+    const wasUser = state.user?.id;
+    state.user = session?.user || null;
+    if (!state.user) {
+      teardownWalletRealtime();
+      state.profile = null; state.isAdmin = false; state.wallet = null; state.walletTxs = [];
+      state.watchlistIds = new Set(); state.userBidAuctions = new Set();
+      updateNavRole();
+    } else if (state.user.id !== wasUser) {
+      await loadProfile(); await loadUserCollections(); await loadWallet(true); setupWalletRealtime();
+    }
+    renderAuthArea();
+    await loadData(false);
+    if (state.detail) loadDetail(state.detail.slug); else route();
+  });
+  await loadData(false);
+  await loadUserCollections();
+  setupRealtime();
+  route();
+})();
+</script>
+</body>
+</html>

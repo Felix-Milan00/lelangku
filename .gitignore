@@ -1,0 +1,9 @@
+# Jangan pernah commit kredensial atau file lokal
+.env
+.env.*
+*.env
+*.pem
+*.key
+node_modules/
+.vercel/
+.DS_Store
