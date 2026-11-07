@@ -1,5 +1,7 @@
 # LelangKu — Versi Publik (Vercel)
 
+**Situs live:** https://lelangku-three.vercel.app
+
 Versi publik dari platform lelang **LelangKu**: satu file statis (`index.html`, tanpa build step) yang membaca data **nyata** langsung dari Supabase, siap di-deploy ke Vercel.
 
 ## Isi Folder
