@@ -251,6 +251,7 @@ footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(255
       <a href="#/" data-nav="marketplace">Marketplace</a>
       <a href="#/watchlist" data-nav="watchlist">&#9733; Watchlist</a>
       <a href="#/wallet" data-nav="wallet" id="navWallet" class="hidden">Wallet</a>
+      <a href="#/seller" data-nav="seller" id="navSeller" class="hidden">🏪 Seller Hub</a>
       <a href="#/admin" data-nav="admin" id="navAdmin" class="hidden">Admin</a>
       <a href="#how">Cara Kerja</a>
       <a href="#" id="refreshLink">Muat Ulang Data</a>
@@ -368,6 +369,16 @@ footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(255
   </main>
 </div>
 
+<div id="sellerView" class="hidden">
+  <main class="wrap">
+    <div class="page-head">
+      <h1>🏪 Seller Hub</h1>
+      <p>Pantau jualan lelang Anda secara live, lihat penawar tertinggi, dan kelola pendapatan hasil penjualan.</p>
+    </div>
+    <div id="sellerContent" style="padding-bottom:48px"></div>
+  </main>
+</div>
+
 <footer class="site">
   <div class="wrap">
     <div class="cols">
@@ -457,6 +468,9 @@ const state = {
   walletFilter: 'semua',
   walletSearch: '',
   walletPage: 1,
+  isSeller: false,
+  sellerTab: 'monitor',
+  sellerAuctions: [],
   adminTab: 'live',
   adminAuctionId: null,
   adminWallets: [],
@@ -482,6 +496,16 @@ const currentPrice = (a) => Number(a.current_highest_bid || 0) > 0 ? Number(a.cu
 const nextMinBid = (a) => Number(a.current_highest_bid || 0) > 0
   ? Number(a.current_highest_bid) + Number(a.minimum_increment || 0)
   : Number(a.starting_price || 0);
+
+function fmtTimestampMs(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return String(d);
+  const date = dt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const ms = String(dt.getMilliseconds()).padStart(3, '0');
+  return `${date}, ${time}.${ms} WIB`;
+}
 
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -748,14 +772,51 @@ function renderDetail() {
     </div>` : `
     <div><div class="gallery-main"><div class="ph">${esc(a.title)}</div>${statusPill(a)}</div></div>`;
 
-  const bidRows = bids.length ? bids.map((b) => `
-    <tr>
-      <td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}</td>
-      <td><b>${rp(b.amount)}</b></td>
-      <td>${b.bid_sequence != null ? '#' + esc(b.bid_sequence) : '—'}</td>
-      <td>${new Date(b.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-    </tr>`).join('')
-    : '<tr><td colspan="4" style="color:var(--muted)">Belum ada bid. Jadilah penawar pertama!</td></tr>';
+  const highestAmount = Number(a.current_highest_bid || 0);
+  const highestBidder = a.highest_bidder_id;
+  const bidRows = bids.length ? bids.map((b, idx) => {
+    const isLeader = (b.bidder_id === highestBidder && Number(b.amount) === highestAmount) || idx === 0;
+    let timeDiffBadge = '';
+    if (idx < bids.length - 1) {
+      const prevBid = bids[idx + 1];
+      const diffMs = new Date(b.created_at).getTime() - new Date(prevBid.created_at).getTime();
+      if (!isNaN(diffMs) && diffMs >= 0) {
+        timeDiffBadge = `<span style="font-size:11px;color:var(--muted);display:block">+${diffMs} ms dari #${prevBid.bid_sequence ?? (bids.length - idx - 1)}</span>`;
+      }
+    }
+    const isSameAmountAsNext = idx < bids.length - 1 && Number(b.amount) === Number(bids[idx + 1].amount);
+    const isSameAmountAsPrev = idx > 0 && Number(b.amount) === Number(bids[idx - 1].amount);
+    const sameBadge = (isSameAmountAsNext || isSameAmountAsPrev)
+      ? `<span class="badge" style="background:#FEF08A;color:#854D0E;font-size:11px;margin-left:4px">Nominal Sama (${isLeader ? 'Menang Duluan ⚡' : 'Kalah Cepat ⚠️'})</span>`
+      : '';
+
+    return `
+    <tr style="${isLeader ? 'background:rgba(214,168,79,0.09);' : ''}">
+      <td><b>${b.bid_sequence != null ? '#' + esc(b.bid_sequence) : '#' + (bids.length - idx)}</b></td>
+      <td>
+        <b>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}</b>
+        ${isLeader ? ' <span class="badge badge-win">🏆 Pemimpin</span>' : ''}
+        ${sameBadge}
+      </td>
+      <td><b style="color:${isLeader ? 'var(--gold-dark)' : 'inherit'}">${rp(b.amount)}</b></td>
+      <td>
+        <span style="font-family:monospace;font-size:12px;font-weight:600">${fmtTimestampMs(b.created_at)}</span>
+        ${timeDiffBadge}
+      </td>
+      <td>${isLeader ? '<span style="color:var(--green);font-weight:600">Sah (Terdepan)</span>' : '<span style="color:var(--muted)">Tergantikan</span>'}</td>
+    </tr>`;
+  }).join('')
+  : '<tr><td colspan="5" style="color:var(--muted)">Belum ada bid. Jadilah penawar pertama!</td></tr>';
+
+  const buyNowBox = (a.buy_now_price && isLive(a)) ? `
+    <div style="margin-top:14px;padding:12px;background:#F8FAFC;border:1.5px dashed var(--gold);border-radius:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:600;color:var(--navy)">⚡ Opsi Beli Langsung (Buy Now):</span>
+        <b style="color:var(--gold-dark);font-size:15px">${rp(a.buy_now_price)}</b>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Beli sekarang tanpa lelang. Saldo Anda langsung diteruskan ke dompet penjual dan lelang selesai seketika.</p>
+      <button class="btn btn-navy btn-block btn-sm" type="button" id="buyNowBtn" style="background:var(--navy);color:var(--gold)">Beli Sekarang (${rp(a.buy_now_price)})</button>
+    </div>` : '';
 
   const bidPanelBody = !isLive(a) ? `
       <div class="login-cta">Lelang ini berstatus <b>${esc(a.status)}</b> dan tidak menerima bid saat ini.</div>`
@@ -772,6 +833,7 @@ function renderDetail() {
         <button class="chip" type="button" data-chip-inc="5">+5&times; kelipatan</button>
       </div>
       <button class="btn btn-gold btn-block" type="button" id="placeBidBtn" style="margin-top:14px">Pasang Bid</button>
+      ${buyNowBox}
       <div class="bid-msg" id="bidMsg"></div>`;
 
   $('detailContent').innerHTML = `
@@ -779,9 +841,15 @@ function renderDetail() {
     <div>
       ${gallery}
       <div class="history">
-        <h3>Riwayat Bid (${bids.length})</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="margin:0">Riwayat Bid (${bids.length})</h3>
+          <span class="badge" style="background:#F2F4F7;color:var(--navy);font-size:11px">Presisi Milidetik (ms)</span>
+        </div>
+        <div style="background:rgba(214,168,79,.12);border:1px solid var(--gold);padding:8px 12px;border-radius:10px;font-size:12.5px;margin-bottom:12px;color:var(--gold-dark)">
+          ⏱️ <b>Audit Konkurensi Sistem Terdistribusi:</b> Setiap bid dicatat dengan timestamp mikrodetik & sekuensial unik (#) via Row-Level Lock PostgreSQL. Jika nominal penawaran sama, sistem secara objektif memenangkan transaksi yang masuk lebih dulu.
+        </div>
         <table>
-          <thead><tr><th>Penawar</th><th>Jumlah</th><th>Urutan</th><th>Waktu</th></tr></thead>
+          <thead><tr><th>Urutan</th><th>Penawar</th><th>Jumlah</th><th>Waktu Transaksi</th><th>Status</th></tr></thead>
           <tbody>${bidRows}</tbody>
         </table>
       </div>
@@ -796,6 +864,8 @@ function renderDetail() {
         <div><span>Kelipatan Minimum</span><b>${rp(a.minimum_increment)}</b></div>
         <div><span>Mulai</span><b style="font-size:14.5px">${fmtDate(a.start_time)}</b></div>
         <div><span>Berakhir</span><b style="font-size:14.5px">${fmtDate(a.end_time)}</b></div>
+        ${a.reserve_price ? `<div><span>Batas Cadangan (Reserve)</span><b>${Number(currentPrice(a)) >= Number(a.reserve_price) ? '<span style="color:var(--green)">Terpenuhi (Met ✅)</span>' : '<span style="color:var(--gold-dark)">Belum Tercapai ⚠️</span>'}</b></div>` : ''}
+        ${a.buy_now_price ? `<div><span>Beli Langsung (Buy Now)</span><b>${rp(a.buy_now_price)}</b></div>` : ''}
       </div>
       <div class="bid-panel">
         <h3>Bid Tertinggi Saat Ini</h3>
@@ -834,6 +904,9 @@ function renderDetail() {
   const placeBtn = $('placeBidBtn');
   if (placeBtn) placeBtn.addEventListener('click', placeBid);
 
+  const buyNowBtn = $('buyNowBtn');
+  if (buyNowBtn) buyNowBtn.addEventListener('click', buyNow);
+
   $('watchBtn').addEventListener('click', toggleWatchlist);
   tickCountdowns();
 }
@@ -871,6 +944,38 @@ async function placeBid() {
     if (state.wallet && data.wallet_available != null) { state.wallet.available_balance = Number(data.wallet_available); renderWalletChip(); }
   } else {
     show(false, 'Respons server: ' + raw);
+  }
+}
+
+async function buyNow() {
+  const a = state.detail;
+  if (!a || !a.buy_now_price) return;
+  if (!state.user) { openAuth('login'); toast('Masuk terlebih dahulu untuk melakukan pembelian'); return; }
+  
+  const confirmed = confirm(`Konfirmasi Beli Langsung (Buy Now):\n\nAnda akan membeli "${a.title}" seharga ${rp(a.buy_now_price)}.\n\nSaldo Anda akan langsung dipotong dan diteruskan ke wallet penjual, dan lelang akan otomatis selesai.`);
+  if (!confirmed) return;
+
+  const btn = $('buyNowBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Memproses Pembelian…'; }
+
+  const { data, error } = await supabase.rpc('buy_now_with_wallet', { p_auction_id: a.id });
+  if (btn) { btn.disabled = false; btn.textContent = `Beli Sekarang (${rp(a.buy_now_price)})`; }
+
+  if (error) {
+    alert('Pembelian gagal: ' + error.message);
+    return;
+  }
+
+  if (data && data.success) {
+    toast('🎉 Selamat! Anda berhasil membeli barang ini.');
+    if (state.wallet && data.wallet_available != null) {
+      state.wallet.available_balance = Number(data.wallet_available);
+      renderWalletChip();
+    }
+    loadWallet(true);
+    scheduleRefresh();
+  } else {
+    alert('Gagal: ' + (data?.error || JSON.stringify(data)));
   }
 }
 
@@ -1176,7 +1281,10 @@ async function renderAdminAuctionDetail() {
   wrap.innerHTML = `
   <div class="form-sec">
     <h3>${esc(a.title)}</h3>
-    <p class="sub">Status: <b>${esc(a.status)}</b> &middot; Kategori: ${esc(a.categories?.name || '-')} &middot; Harga awal ${rp(a.starting_price)} &middot; Kelipatan ${rp(a.minimum_increment)}${a.reserve_price ? ' &middot; Reserve ' + rp(a.reserve_price) : ''}</p>
+    <p class="sub">
+      Status: <b>${esc(a.status)}</b> &middot; Kategori: ${esc(a.categories?.name || '-')} &middot; Harga awal ${rp(a.starting_price)} &middot; Kelipatan ${rp(a.minimum_increment)}${a.reserve_price ? ' &middot; Reserve ' + rp(a.reserve_price) : ''}<br>
+      <span style="color:var(--muted);font-size:12.5px">🔒 Penjual: <b>@${esc(a.seller_id ? a.seller_id.slice(0, 8) + '...' : 'seller')} (ID Terproteksi)</b> &middot; <span class="badge" style="background:#E0E7FF;color:#3730A3;font-size:11px">Privasi Seller Terlindungi (Kontak & Rekening Dirahasiakan)</span></span>
+    </p>
     <div class="kv">
       <div><span>Bid Tertinggi</span><b>${rp(currentPrice(a))}</b></div>
       <div><span>Jumlah Bid</span><b>${bidList.length}</b></div>
@@ -1194,9 +1302,9 @@ async function renderAdminAuctionDetail() {
     </div>
     <div class="two-col">
       <div>
-        <h3 style="margin-bottom:8px">Riwayat Bid Live</h3>
-        <div class="tbl-wrap"><table class="data" style="min-width:0"><thead><tr><th>Penawar</th><th>Jumlah</th><th>Waktu</th></tr></thead>
-        <tbody>${bidList.length ? bidList.map((b) => `<tr><td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}${a.highest_bidder_id === b.bidder_id && Number(b.amount) === Number(a.current_highest_bid) ? ' <span class="badge badge-win">Pemimpin</span>' : ''}</td><td><b>${rp(b.amount)}</b></td><td>${fmtD(b.created_at)}</td></tr>`).join('') : '<tr><td colspan="3" style="color:var(--muted)">Belum ada bid.</td></tr>'}</tbody></table></div>
+        <h3 style="margin-bottom:8px">Riwayat Bid Live (Presisi Milidetik)</h3>
+        <div class="tbl-wrap"><table class="data" style="min-width:0"><thead><tr><th>Penawar</th><th>Jumlah</th><th>Waktu Transaksi</th></tr></thead>
+        <tbody>${bidList.length ? bidList.map((b) => `<tr><td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}${a.highest_bidder_id === b.bidder_id && Number(b.amount) === Number(a.current_highest_bid) ? ' <span class="badge badge-win">Pemimpin</span>' : ''}</td><td><b>${rp(b.amount)}</b></td><td><span style="font-family:monospace;font-size:12px">${fmtTimestampMs(b.created_at)}</span></td></tr>`).join('') : '<tr><td colspan="3" style="color:var(--muted)">Belum ada bid.</td></tr>'}</tbody></table></div>
       </div>
       <div>
         <h3 style="margin-bottom:8px">Timeline Aktivitas Admin</h3>
@@ -1508,7 +1616,7 @@ async function renderAdminBids() {
       <td><a href="#/auction/${esc(b.auctions?.slug || '')}"><b>${esc(b.auctions?.title || 'Lelang')}</b></a>${Number(b.auctions?.current_highest_bid) === Number(b.amount) ? ' <span class="badge badge-win">Pemimpin saat ini</span>' : ''}</td>
       <td>${esc(b.profiles?.username || b.profiles?.full_name || 'Penawar')}</td>
       <td><b>${rp(b.amount)}</b></td>
-      <td>${new Date(b.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>`).join('')
+      <td><span style="font-family:monospace;font-size:12px">${fmtTimestampMs(b.created_at)}</span></td></tr>`).join('')
       : '<tr><td colspan="5" style="color:var(--muted)">Tidak ada bid yang cocok.</td></tr>';
   };
   panel.innerHTML = `
@@ -1575,11 +1683,23 @@ function lineChartSVG(txsAsc) {
 }
 
 function txTypeLabel(t) {
-  const m = { deposit: 'Top Up', admin_credit: 'Penambahan Admin', admin_deduction: 'Pengurangan Admin', bid_reserve: 'Saldo Tertahan Bid', bid_release: 'Pelepasan Bid', bid_payment: 'Pembayaran Lelang', refund: 'Refund', withdrawal: 'Penarikan' };
+  const m = { 
+    deposit: 'Top Up', 
+    admin_credit: 'Penambahan Admin', 
+    admin_deduction: 'Pengurangan Admin', 
+    bid_reserve: 'Saldo Tertahan Bid', 
+    bid_release: 'Pelepasan Bid', 
+    bid_payment: 'Pembayaran Lelang (Menang)',
+    'Auction Payment': 'Pembayaran Lelang (Menang)',
+    'Auction Sale Proceeds': 'Hasil Penjualan Lelang (Masuk)',
+    'Buy Now Payment': 'Pembayaran Buy Now',
+    refund: 'Refund', 
+    withdrawal: 'Penarikan' 
+  };
   return m[t.transaction_type] || (t.transaction_type || 'Transaksi');
 }
 function isAdminTx(t) { return String(t.transaction_type || '').startsWith('admin') || !!t.performed_by; }
-function isAuctionTx(t) { return !!t.related_auction_id || ['bid_reserve', 'bid_release', 'bid_payment'].includes(t.transaction_type); }
+function isAuctionTx(t) { return !!t.related_auction_id || ['bid_reserve', 'bid_release', 'bid_payment', 'Auction Payment', 'Auction Sale Proceeds', 'Buy Now Payment'].includes(t.transaction_type); }
 
 function renderWallet() {
   const box = $('walletContent');
@@ -1674,16 +1794,356 @@ function teardownWalletRealtime() {
   if (state.walletChannel) { supabase.removeChannel(state.walletChannel); state.walletChannel = null; }
 }
 
+/* ================= Seller Hub ================= */
+async function renderSellerGate() {
+  const box = $('sellerContent');
+  if (!box) return;
+  if (!state.user) {
+    box.innerHTML = `<div class="state-box">
+      <b>Masuk untuk Mengakses Seller Hub</b>
+      Seller Hub memungkinkan Anda memantau seluruh lelang jualan Anda secara live, melihat penawar tertinggi secara real-time, dan mengelola dana hasil penjualan.<br><br>
+      <button class="btn btn-gold" type="button" onclick="document.getElementById('btnLogin')?.click()">Masuk / Daftar</button>
+    </div>`;
+    return;
+  }
+  loadSeller();
+}
+
+async function loadSeller() {
+  const box = $('sellerContent');
+  if (!box) return;
+  box.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>';
+
+  const { data: myAuctions, error } = await supabase
+    .from('auctions')
+    .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,categories(name),auction_images(image_url)')
+    .eq('seller_id', state.user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    box.innerHTML = `<div class="state-box error"><b>Gagal memuat data jualan</b>${esc(error.message)}</div>`;
+    return;
+  }
+
+  const list = myAuctions || [];
+  state.sellerAuctions = list;
+
+  const hbIds = [...new Set(list.map((a) => a.highest_bidder_id).filter(Boolean))];
+  let hbMap = new Map();
+  if (hbIds.length) {
+    const { data: profs } = await supabase.from('profiles').select('id,username,full_name').in('id', hbIds);
+    (profs || []).forEach((p) => hbMap.set(p.id, p.username || p.full_name || 'Penawar'));
+  }
+
+  const liveCount = list.filter((a) => isLive(a)).length;
+  const completedCount = list.filter((a) => a.status === 'Completed').length;
+  const totalRevenue = list
+    .filter((a) => a.status === 'Completed')
+    .reduce((s, a) => s + Number(a.current_highest_bid || 0), 0);
+
+  const tabs = [
+    ['monitor', '📡 Live Monitoring Jualan'],
+    ['create', '➕ Pasang Barang Baru'],
+    ['wallet', '💰 Omset & Dompet Seller']
+  ];
+
+  box.innerHTML = `
+    <div style="background:#1E293B;color:#fff;border-radius:16px;padding:22px;margin-bottom:20px;border:1px solid var(--navy-light)">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="margin:0;font-size:22px;color:#F8FAFC">Halo, Penjual @${esc(state.profile?.username || 'Seller')}!</h2>
+          <p style="margin:4px 0 0;font-size:13.5px;color:#94A3B8">Pantau lelang jualan Anda secara live. Penawaran tertinggi dan dana terjual otomatis sinkron.</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <span class="badge" style="background:#0F172A;color:var(--gold);border:1px solid var(--gold);padding:8px 14px;font-size:12px">
+            Role: <b>${esc(state.profile?.role || 'user')}</b>
+          </span>
+          ${state.profile?.role === 'user' ? `
+          <button class="btn btn-gold btn-sm" id="btnBecomeSeller">Aktifkan Status Seller Resmi</button>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="wallet-grid" style="margin-bottom:24px">
+      <div class="wallet-card"><span>Total Barang Dijual</span><b>${list.length}</b><p style="color:var(--muted);font-size:12.5px">Seluruh riwayat katalog</p></div>
+      <div class="wallet-card"><span>Sedang Berlangsung (Live)</span><b style="color:var(--green)">${liveCount}</b><p style="color:var(--muted);font-size:12.5px">Menerima penawaran saat ini</p></div>
+      <div class="wallet-card"><span>Barang Terjual (Sukses)</span><b style="color:var(--gold-dark)">${completedCount}</b><p style="color:var(--muted);font-size:12.5px">Selesai & diselesaikan</p></div>
+      <div class="wallet-card"><span>Total Omset Masuk Wallet</span><b style="color:#2563EB">${rp(totalRevenue)}</b><p style="color:var(--muted);font-size:12.5px">Pendapatan hasil lelang</p></div>
+    </div>
+
+    <div class="tabs" style="margin-bottom:20px">
+      ${tabs.map(([k, l]) => `<button type="button" data-stab="${k}" class="${state.sellerTab === k ? 'active' : ''}">${l}</button>`).join('')}
+    </div>
+
+    <div id="sellerPanel"></div>
+  `;
+
+  box.querySelectorAll('[data-stab]').forEach((b) => b.addEventListener('click', () => {
+    state.sellerTab = b.getAttribute('data-stab');
+    loadSeller();
+  }));
+
+  const btnBecome = $('btnBecomeSeller');
+  if (btnBecome) {
+    btnBecome.addEventListener('click', async () => {
+      btnBecome.disabled = true;
+      const { error } = await supabase.rpc('become_seller');
+      if (!error) {
+        toast('Selamat! Anda sekarang terdaftar sebagai Seller resmi.');
+        await loadProfile();
+        loadSeller();
+      } else {
+        toast('Gagal memperbarui status: ' + error.message);
+        btnBecome.disabled = false;
+      }
+    });
+  }
+
+  const panel = $('sellerPanel');
+  if (!panel) return;
+
+  if (state.sellerTab === 'monitor') {
+    renderSellerMonitor(panel, list, hbMap);
+  } else if (state.sellerTab === 'create') {
+    renderSellerCreate(panel);
+  } else if (state.sellerTab === 'wallet') {
+    renderSellerWallet(panel, totalRevenue);
+  }
+}
+
+function renderSellerMonitor(panel, list, hbMap) {
+  if (!list.length) {
+    panel.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+      <h3>Belum Ada Barang yang Dilelang</h3>
+      <p style="color:var(--muted);margin-bottom:16px">Mulai pasang barang lelang pertama Anda sekarang juga.</p>
+      <button class="btn btn-gold" onclick="state.sellerTab='create';loadSeller();">Pasang Barang Baru &rarr;</button>
+    </div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div style="background:rgba(214,168,79,.1);border:1px solid var(--gold);padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:16px;color:var(--gold-dark)">
+      💡 <b>Pegangan Real-Time Seller:</b> Tabel di bawah adalah bukti live seluruh penawaran yang masuk. Ketika waktu lelang berakhir, dana penawar tertinggi langsung ditransfer ke dompet Anda.
+    </div>
+    <div class="tbl-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Barang</th>
+            <th>Status</th>
+            <th>Harga Awal</th>
+            <th>Harga Tertinggi (Live)</th>
+            <th>Pemimpin / Penawar Tertinggi</th>
+            <th>Reserve / Buy Now</th>
+            <th>Sisa Waktu</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map((a) => {
+            const hasReserve = !!a.reserve_price;
+            const reserveMet = hasReserve && (Number(a.current_highest_bid || 0) >= Number(a.reserve_price));
+            const hb = hbMap.get(a.highest_bidder_id);
+            return `
+            <tr>
+              <td>
+                <b>${esc(a.title)}</b><br>
+                <span style="font-size:12px;color:var(--muted)">${esc(a.categories?.name || 'Tanpa Kategori')} &middot; Kondisi: ${esc(a.condition || '-')}</span>
+              </td>
+              <td>${statusPill(a)}</td>
+              <td>${rp(a.starting_price)}</td>
+              <td><b style="color:var(--green);font-size:15px">${rp(currentPrice(a))}</b></td>
+              <td>
+                ${hb ? `<b>@${esc(hb)}</b> <span class="badge badge-win" style="font-size:10px">Tertinggi</span>` : '<span style="color:var(--muted)">Belum ada bid</span>'}
+              </td>
+              <td style="font-size:12px">
+                ${hasReserve ? `<div>Reserve: <b>${rp(a.reserve_price)}</b><br>${reserveMet ? '<span style="color:var(--green)">✅ Terpenuhi</span>' : '<span style="color:var(--gold-dark)">⚠️ Belum Capai</span>'}</div>` : '<div>Reserve: —</div>'}
+                ${a.buy_now_price ? `<div style="margin-top:3px;color:var(--navy)">Buy Now: <b>${rp(a.buy_now_price)}</b></div>` : ''}
+              </td>
+              <td><span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></td>
+              <td>
+                <a class="btn btn-outline btn-sm" href="#/auction/${esc(a.slug)}" style="white-space:nowrap">Pantau Live &rarr;</a>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  tickCountdowns();
+}
+
+function renderSellerCreate(panel) {
+  const catOpts = state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  panel.innerHTML = `
+    <div class="card" style="padding:24px">
+      <h3 style="margin-top:0">➕ Pasang Barang Lelang Baru</h3>
+      <p class="sub">Barang Anda akan langsung diterbitkan secara live ke Marketplace LelangKu.</p>
+      <form id="sellerCreateForm">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1">
+            <label>Judul Barang Lelang *</label>
+            <input id="scTitle" required placeholder="mis. Jam Tangan Rolex Submariner Original">
+          </div>
+          <div class="field">
+            <label>Kategori *</label>
+            <select id="scCategory">${catOpts}</select>
+          </div>
+          <div class="field">
+            <label>Kondisi Barang</label>
+            <input id="scCondition" placeholder="mis. Baru / Bekas Sangat Baik">
+          </div>
+          <div class="field" style="grid-column:1/-1">
+            <label>Deskripsi Barang *</label>
+            <textarea id="scDesc" rows="4" required placeholder="Jelaskan spesifikasi, kelengkapan, dan kondisi barang selengkap-lengkapnya…"></textarea>
+          </div>
+          <div class="field">
+            <label>Harga Mulai / Starting Price (Rp) *</label>
+            <input id="scStart" type="number" min="1000" required placeholder="1000000">
+          </div>
+          <div class="field">
+            <label>Kelipatan Minimum Bid (Rp) *</label>
+            <input id="scInc" type="number" min="1000" value="50000" required>
+          </div>
+          <div class="field">
+            <label>Reserve Price / Batas Cadangan (Rp, Opsional)</label>
+            <input id="scReserve" type="number" min="0" placeholder="Batas minimum agar barang sah terjual">
+            <small style="color:var(--muted);font-size:11.5px">Jika penawaran tertinggi di akhir lelang belum mencapai harga ini, barang batal terjual secara aman.</small>
+          </div>
+          <div class="field">
+            <label>Buy Now Price / Beli Langsung (Rp, Opsional)</label>
+            <input id="scBuyNow" type="number" min="0" placeholder="Harga beli langsung seketika">
+            <small style="color:var(--muted);font-size:11.5px">Pembeli dapat langsung membeli tanpa lelang seharga nominal ini.</small>
+          </div>
+          <div class="field">
+            <label>Durasi Lelang *</label>
+            <select id="scDuration">
+              <option value="5">5 Menit (Demo Cepat)</option>
+              <option value="15">15 Menit</option>
+              <option value="60">1 Jam</option>
+              <option value="1440" selected>24 Jam (1 Hari)</option>
+              <option value="4320">3 Hari</option>
+              <option value="10080">7 Hari</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>URL Foto Barang</label>
+            <input id="scImage" placeholder="https://… link foto barang">
+          </div>
+        </div>
+        <div class="bid-msg" id="scMsg" style="margin-top:14px"></div>
+        <button class="btn btn-gold" type="submit" id="scSubmitBtn" style="margin-top:14px;padding:12px 24px">🚀 Publikasikan Lelang Sekarang</button>
+      </form>
+    </div>
+  `;
+
+  $('sellerCreateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('scSubmitBtn');
+    const msg = $('scMsg');
+    const show = (ok, t) => { msg.className = 'bid-msg ' + (ok ? 'ok' : 'err'); msg.textContent = t; };
+
+    const title = $('scTitle').value.trim();
+    const startPrice = Number($('scStart').value) || 0;
+    const durMins = Number($('scDuration').value) || 1440;
+    const now = new Date();
+    const end = new Date(now.getTime() + durMins * 60000);
+
+    btn.disabled = true;
+    btn.textContent = 'Menerbitkan Lelang…';
+
+    const payload = {
+      seller_id: state.user.id,
+      category_id: $('scCategory').value || null,
+      title,
+      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + Date.now().toString(36),
+      description: $('scDesc').value.trim() || null,
+      condition: $('scCondition').value.trim() || null,
+      starting_price: startPrice,
+      minimum_increment: Number($('scInc').value) || 50000,
+      reserve_price: $('scReserve').value ? Number($('scReserve').value) : null,
+      buy_now_price: $('scBuyNow').value ? Number($('scBuyNow').value) : null,
+      start_time: now.toISOString(),
+      end_time: end.toISOString(),
+      status: 'Live',
+      anti_sniping_enabled: true,
+      extension_threshold_seconds: 30,
+      extension_duration_seconds: 120
+    };
+
+    const { data, error } = await supabase.from('auctions').insert(payload).select('id,slug').single();
+    btn.disabled = false;
+    btn.textContent = '🚀 Publikasikan Lelang Sekarang';
+
+    if (error) {
+      show(false, 'Gagal membuat lelang: ' + error.message);
+      return;
+    }
+
+    if ($('scImage').value.trim()) {
+      await supabase.from('auction_images').insert({
+        auction_id: data.id,
+        image_url: $('scImage').value.trim(),
+        is_primary: true,
+        sort_order: 0
+      });
+    }
+
+    toast('🎉 Lelang Anda berhasil dipublikasikan!');
+    state.sellerTab = 'monitor';
+    await loadData(false);
+    loadSeller();
+  });
+}
+
+function renderSellerWallet(panel, totalRevenue) {
+  const w = state.wallet;
+  const avail = Number(w?.available_balance || 0);
+  const proceedsTxs = state.walletTxs.filter((t) => 
+    t.transaction_type === 'Auction Sale Proceeds' || t.transaction_type === 'Buy Now Payment' || String(t.description || '').toLowerCase().includes('hasil penjualan')
+  );
+
+  panel.innerHTML = `
+    <div class="card" style="padding:24px">
+      <h3 style="margin-top:0">💰 Dompet & Hasil Penjualan Lelang</h3>
+      <p class="sub">Setiap barang yang sukses dimenangkan oleh pembeli akan otomatis mencairkan saldo ke dompet Anda.</p>
+      <div class="wallet-grid" style="margin:16px 0">
+        <div class="wallet-card"><span>Saldo Tersedia di Wallet</span><b style="color:var(--green)">${rp(avail)}</b><p style="font-size:12px;color:var(--muted)">Dapat ditarik atau digunakan</p></div>
+        <div class="wallet-card"><span>Total Akumulasi Omset</span><b style="color:var(--gold-dark)">${rp(totalRevenue)}</b><p style="font-size:12px;color:var(--muted)">Dari seluruh lelang selesai</p></div>
+      </div>
+
+      <h4 style="margin:20px 0 10px">Riwayat Pencairan Hasil Lelang</h4>
+      <div class="tbl-wrap">
+        <table class="data">
+          <thead><tr><th>Waktu</th><th>Deskripsi</th><th>Jumlah Masuk</th><th>Saldo Sesudah</th></tr></thead>
+          <tbody>
+            ${proceedsTxs.length ? proceedsTxs.map((t) => `
+              <tr>
+                <td>${fmtTimestampMs(t.created_at)}</td>
+                <td><b>${esc(t.description || 'Hasil Penjualan Lelang')}</b></td>
+                <td><b style="color:var(--green)">+${rp(t.amount)}</b></td>
+                <td>${rp(t.available_balance_after)}</td>
+              </tr>
+            `).join('') : '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:18px">Belum ada pencairan lelang yang selesai. Begitu ada lelang yang selesai dan ada pemenang, dana otomatis tercatat di sini.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 /* ================= Profil & peran ================= */
 async function loadProfile() {
-  if (!state.user) { state.profile = null; state.isAdmin = false; updateNavRole(); return; }
+  if (!state.user) { state.profile = null; state.isAdmin = false; state.isSeller = false; updateNavRole(); return; }
   const { data } = await supabase.from('profiles').select('id,username,full_name,email,role').eq('id', state.user.id).maybeSingle();
   state.profile = data || null;
   state.isAdmin = !!data && data.role === 'admin';
+  state.isSeller = !!data && (data.role === 'seller' || data.role === 'admin');
   updateNavRole();
 }
 function updateNavRole() {
   $('navWallet')?.classList.toggle('hidden', !state.user);
+  $('navSeller')?.classList.toggle('hidden', !state.user);
   $('navAdmin')?.classList.toggle('hidden', !state.isAdmin);
 }
 
@@ -1698,6 +2158,7 @@ function scheduleRefresh() {
     if (slug) await loadDetail(slug);
     else if (view === 'watchlist') renderWatchlist();
     else if (view === 'wallet') { await loadWallet(true); renderWallet(); }
+    else if (view === 'seller') renderSellerGate();
     else if (view === 'admin' && state.isAdmin) loadAdmin();
   }, 400);
 }
@@ -1723,10 +2184,11 @@ function currentView() {
   const h = location.hash || '#/';
   if (h.startsWith('#/watchlist')) return 'watchlist';
   if (h.startsWith('#/wallet')) return 'wallet';
+  if (h.startsWith('#/seller')) return 'seller';
   if (h.startsWith('#/admin')) return 'admin';
   return 'home';
 }
-const ALL_VIEWS = ['homeView', 'detailView', 'watchlistView', 'walletView', 'adminView'];
+const ALL_VIEWS = ['homeView', 'detailView', 'watchlistView', 'walletView', 'sellerView', 'adminView'];
 function showView(id) {
   ALL_VIEWS.forEach((v) => $(v).classList.toggle('hidden', v !== id));
 }
@@ -1737,6 +2199,7 @@ function route() {
   state.detail = null;
   if (view === 'watchlist') { showView('watchlistView'); window.scrollTo({ top: 0 }); renderWatchlist(); }
   else if (view === 'wallet') { showView('walletView'); window.scrollTo({ top: 0 }); renderWallet(); if (state.user && !state.wallet) loadWallet(); }
+  else if (view === 'seller') { showView('sellerView'); window.scrollTo({ top: 0 }); renderSellerGate(); }
   else if (view === 'admin') { showView('adminView'); window.scrollTo({ top: 0 }); renderAdminGate(); }
   else {
     showView('homeView');
