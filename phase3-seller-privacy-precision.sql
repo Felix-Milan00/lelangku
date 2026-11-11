@@ -63,6 +63,8 @@ DECLARE
   v_wallet public.wallets%ROWTYPE;
   v_prev_wallet public.wallets%ROWTYPE;
   v_created_at timestamptz;
+  v_bidder_name text;
+  v_bidder_username text;
 BEGIN
   IF v_user IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'You must be signed in to place a bid');
@@ -70,6 +72,11 @@ BEGIN
   IF p_amount IS NULL OR p_amount <= 0 THEN
     RETURN jsonb_build_object('success', false, 'error', 'Bid amount must be a positive number');
   END IF;
+
+  -- Ambil nama dan username penawar
+  SELECT COALESCE(full_name, username, 'Penawar'), COALESCE(username, 'user')
+  INTO v_bidder_name, v_bidder_username
+  FROM public.profiles WHERE id = v_user;
 
   -- Kunci baris lelang secara eksklusif (Row-Level Locking untuk mencegah Race Condition)
   SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
@@ -139,9 +146,26 @@ BEGIN
 
     -- Surat notifikasi untuk Seller (ada persaingan harga sama di lelangnya)
     INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
-    VALUES (v_auction.seller_id, p_auction_id, 'bid_placed', '⚡ Persaingan Nominal Sama di Lelang Anda',
-      'Terjadi persaingan penawaran dengan nominal sama Rp' || to_char(p_amount, 'FM999,999,999,999') || ' pada "' || v_auction.title || '". Sistem memenangkan transaksi yang masuk lebih awal.',
-      jsonb_build_object('amount', p_amount, 'bid_id', v_bid_id, 'bid_sequence', v_sequence));
+    VALUES (
+      v_auction.seller_id,
+      p_auction_id,
+      'bid_placed',
+      '⚡ Persaingan Nominal Sama di Lelang: ' || v_auction.title,
+      'Terjadi penawaran dengan nominal sama di detik yang sama pada "' || v_auction.title || '"' || chr(10) ||
+      '• Penawar: ' || v_bidder_name || ' (@' || v_bidder_username || ')' || chr(10) ||
+      '• Nominal: Rp' || to_char(p_amount, 'FM999,999,999,999') || chr(10) ||
+      '• Urutan Bid: #' || v_sequence || chr(10) ||
+      '• Status: Kalah Cepat (+beberapa milidetik). Penawar pertama tetap memegang prioritas transaksi.',
+      jsonb_build_object(
+        'amount', p_amount,
+        'bid_id', v_bid_id,
+        'bid_sequence', v_sequence,
+        'bidder_name', v_bidder_name,
+        'bidder_username', v_bidder_username,
+        'auction_title', v_auction.title,
+        'status', 'concurrent_tie_outpaced'
+      )
+    );
 
     RETURN jsonb_build_object(
       'success', true,
@@ -237,9 +261,24 @@ BEGIN
   WHERE id = p_auction_id;
 
   INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
-  VALUES (v_auction.seller_id, p_auction_id, 'bid_placed', 'New bid on your auction',
-    'A new bid was placed on "' || v_auction.title || '".',
-    jsonb_build_object('amount', p_amount, 'bid_id', v_bid_id));
+  VALUES (
+    v_auction.seller_id, 
+    p_auction_id, 
+    'bid_placed', 
+    '🏷️ Penawaran Baru: "' || v_auction.title || '"',
+    'Ada penawaran baru masuk pada barang Anda "' || v_auction.title || '"' || chr(10) ||
+    '• Penawar: ' || v_bidder_name || ' (@' || v_bidder_username || ')' || chr(10) ||
+    '• Nominal Bid: Rp' || to_char(p_amount, 'FM999,999,999,999') || chr(10) ||
+    '• Urutan Bid: #' || v_sequence,
+    jsonb_build_object(
+      'amount', p_amount,
+      'bid_id', v_bid_id,
+      'bid_sequence', v_sequence,
+      'bidder_name', v_bidder_name,
+      'bidder_username', v_bidder_username,
+      'auction_title', v_auction.title
+    )
+  );
 
   RETURN jsonb_build_object(
     'success', true, 
@@ -266,6 +305,9 @@ DECLARE
   v_winner_wallet public.wallets%ROWTYPE;
   v_seller_wallet public.wallets%ROWTYPE;
   v_hours integer := 72;
+  v_winner_name text;
+  v_winner_username text;
+  v_bid_count integer;
 BEGIN
   IF NOT public._require_admin_or_trusted() THEN
     RETURN jsonb_build_object('success', false, 'error', 'Only administrators can finalize auctions');
@@ -342,14 +384,44 @@ BEGIN
         completed_at = now()
     WHERE id = p_auction_id;
 
-    -- Notifikasi ke Pemenang & Penjual
-    INSERT INTO public.notifications(user_id, auction_id, type, title, message)
-    VALUES (v_auction.highest_bidder_id, p_auction_id, 'auction_won', 'Selamat! Anda Menang Lelang',
-      'Selamat! Anda memenangkan "' || v_auction.title || '" seharga Rp' || to_char(v_auction.current_highest_bid, 'FM999,999,999,999') || '.');
+    -- Ambil profil pemenang dan total bid
+    SELECT COALESCE(full_name, username, 'Penawar'), COALESCE(username, 'user')
+    INTO v_winner_name, v_winner_username
+    FROM public.profiles WHERE id = v_auction.highest_bidder_id;
 
-    INSERT INTO public.notifications(user_id, auction_id, type, title, message)
-    VALUES (v_auction.seller_id, p_auction_id, 'auction_sold', 'Barang Anda Berhasil Terjual!',
-      'Selamat! Barang lelang "' || v_auction.title || '" Anda berhasil terjual seharga Rp' || to_char(v_auction.current_highest_bid, 'FM999,999,999,999') || '. Saldo telah masuk ke wallet Anda.');
+    SELECT count(*) INTO v_bid_count
+    FROM public.bids WHERE auction_id = p_auction_id;
+
+    -- Notifikasi ke Pemenang & Penjual
+    INSERT INTO public.notifications(user_id, auction_id, type, title, message, metadata)
+    VALUES (v_auction.highest_bidder_id, p_auction_id, 'auction_won', 'Selamat! Anda Menang Lelang',
+      'Selamat! Anda memenangkan "' || v_auction.title || '" seharga Rp' || to_char(v_auction.current_highest_bid, 'FM999,999,999,999') || '.',
+      jsonb_build_object('amount', v_auction.current_highest_bid, 'auction_title', v_auction.title));
+
+    INSERT INTO public.notifications(user_id, auction_id, type, title, message, metadata)
+    VALUES (
+      v_auction.seller_id,
+      p_auction_id,
+      'auction_sold',
+      '🏆 Laporan Hasil Akhir: "' || v_auction.title || '" Terjual!',
+      'Selamat! Lelang barang "' || v_auction.title || '" Anda telah resmi berakhir dan sukses terjual.' || chr(10) ||
+      '• Pembeli / Pemenang: ' || v_winner_name || ' (@' || v_winner_username || ')' || chr(10) ||
+      '• Harga Akhir Terjual: Rp' || to_char(v_auction.current_highest_bid, 'FM999,999,999,999') || chr(10) ||
+      '• Total Penawaran Masuk: ' || v_bid_count || ' bid' || chr(10) ||
+      '• Status Pencairan: Dana sebesar Rp' || to_char(v_auction.current_highest_bid, 'FM999,999,999,999') || ' telah otomatis masuk ke dompet Anda.',
+      jsonb_build_object(
+        'event', 'auction_completed',
+        'auction_title', v_auction.title,
+        'winner_name', v_winner_name,
+        'winner_username', v_winner_username,
+        'winner_id', v_auction.highest_bidder_id,
+        'final_price', v_auction.current_highest_bid,
+        'amount', v_auction.current_highest_bid,
+        'total_bids', v_bid_count,
+        'method', 'Lelang Terbuka',
+        'completed_at', now()
+      )
+    );
 
     RETURN jsonb_build_object('success', true, 'status', 'Completed',
       'winner_id', v_auction.highest_bidder_id, 'seller_id', v_auction.seller_id, 'final_price', v_auction.current_highest_bid);
@@ -378,10 +450,17 @@ DECLARE
   v_seller_wallet public.wallets%ROWTYPE;
   v_sequence integer;
   v_bid_id uuid;
+  v_buyer_name text;
+  v_buyer_username text;
 BEGIN
   IF v_user IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'You must be signed in to purchase');
   END IF;
+
+  -- Ambil data profil pembeli
+  SELECT COALESCE(full_name, username, 'Pembeli'), COALESCE(username, 'user')
+  INTO v_buyer_name, v_buyer_username
+  FROM public.profiles WHERE id = v_user;
 
   SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -447,13 +526,34 @@ BEGIN
   WHERE id = p_auction_id;
 
   -- 6. Notifikasi
-  INSERT INTO public.notifications(user_id, auction_id, type, title, message)
+  INSERT INTO public.notifications(user_id, auction_id, type, title, message, metadata)
   VALUES (v_user, p_auction_id, 'auction_won', 'Pembelian Sukses (Buy Now)',
-    'Selamat! Anda telah langsung membeli "' || v_auction.title || '" seharga Rp' || to_char(v_price, 'FM999,999,999,999') || '.');
+    'Selamat! Anda telah langsung membeli "' || v_auction.title || '" seharga Rp' || to_char(v_price, 'FM999,999,999,999') || '.',
+    jsonb_build_object('amount', v_price, 'auction_title', v_auction.title));
 
-  INSERT INTO public.notifications(user_id, auction_id, type, title, message)
-  VALUES (v_auction.seller_id, p_auction_id, 'auction_sold', 'Barang Anda Terjual via Buy Now!',
-    'Barang lelang "' || v_auction.title || '" Anda langsung dibeli oleh pembeli seharga Rp' || to_char(v_price, 'FM999,999,999,999') || '. Saldo telah masuk ke wallet Anda.');
+  INSERT INTO public.notifications(user_id, auction_id, type, title, message, metadata)
+  VALUES (
+    v_auction.seller_id,
+    p_auction_id,
+    'auction_sold',
+    '⚡ Laporan Penjualan Instan: "' || v_auction.title || '" Terjual via Buy Now!',
+    'Barang lelang "' || v_auction.title || '" Anda telah langsung dibeli oleh pembeli.' || chr(10) ||
+    '• Pembeli: ' || v_buyer_name || ' (@' || v_buyer_username || ')' || chr(10) ||
+    '• Harga Beli Langsung: Rp' || to_char(v_price, 'FM999,999,999,999') || chr(10) ||
+    '• Metode Transaksi: Beli Langsung (Buy Now)' || chr(10) ||
+    '• Status Pencairan: Dana sebesar Rp' || to_char(v_price, 'FM999,999,999,999') || ' telah langsung masuk ke dompet Anda.',
+    jsonb_build_object(
+      'event', 'buy_now_completed',
+      'auction_title', v_auction.title,
+      'winner_name', v_buyer_name,
+      'winner_username', v_buyer_username,
+      'winner_id', v_user,
+      'final_price', v_price,
+      'amount', v_price,
+      'method', 'Beli Langsung (Buy Now)',
+      'completed_at', now()
+    )
+  );
 
   RETURN jsonb_build_object(
     'success', true, 
@@ -508,9 +608,23 @@ BEGIN
   VALUES (
     v_user, 
     v_ntype, 
-    COALESCE(p_title, '📬 Surat Uji Coba Sistem Terdistribusi'),
-    COALESCE(p_message, 'Pesan ini dikirimkan otomatis melalui Pub/Sub Notification Engine untuk menguji fungsionalitas kotak surat seller/peserta lelang.'),
-    jsonb_build_object('source', 'manual_test', 'timestamp', now())
+    COALESCE(p_title, '🏆 Laporan Hasil Akhir: "2019 BMW X3 sDrive3" Terjual!'),
+    COALESCE(p_message, 'Selamat! Lelang barang "2019 BMW X3 sDrive3" Anda telah resmi berakhir dan sukses terjual.' || chr(10) ||
+      '• Pembeli / Pemenang: Budi Santoso (@budi.s)' || chr(10) ||
+      '• Harga Akhir Terjual: Rp612.000.000' || chr(10) ||
+      '• Total Penawaran Masuk: 14 bid' || chr(10) ||
+      '• Status Pencairan: Dana sebesar Rp612.000.000 telah otomatis masuk ke dompet Anda.'),
+    jsonb_build_object(
+      'event', 'auction_completed',
+      'auction_title', '2019 BMW X3 sDrive3',
+      'winner_name', 'Budi Santoso',
+      'winner_username', 'budi.s',
+      'final_price', 612000000,
+      'amount', 612000000,
+      'total_bids', 14,
+      'method', 'Lelang Terbuka',
+      'completed_at', now()
+    )
   )
   RETURNING id INTO v_notif_id;
 
