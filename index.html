@@ -1861,7 +1861,7 @@ async function loadSeller() {
   const unreadMails = (state.notifications || []).filter((n) => !n.is_read && n.type !== 'bid_placed').length;
   const tabs = [
     ['monitor', `📡 Live Monitoring Jualan (${list.length} Barang)`],
-    ['mail', `📬 Kotak Masuk Surat (${unreadMails})`],
+    ['mail', unreadMails > 0 ? `📬 Kotak Masuk Surat (${unreadMails})` : '📬 Kotak Masuk Surat'],
     ['wallet', '💰 Omset & Dompet Seller'],
     ['create', '➕ Pasang Barang Baru']
   ];
@@ -1899,6 +1899,12 @@ async function loadSeller() {
 
   box.querySelectorAll('[data-stab]').forEach((b) => b.addEventListener('click', () => {
     state.sellerTab = b.getAttribute('data-stab');
+    if (state.sellerTab === 'mail' && unreadMails > 0) {
+      (state.notifications || []).forEach((n) => { n.is_read = true; });
+      state.unreadNotifs = 0;
+      updateNavRole();
+      supabase.from('notifications').update({ is_read: true }).eq('user_id', state.user.id).then();
+    }
     loadSeller();
   }));
 
@@ -1928,6 +1934,12 @@ async function loadSeller() {
   } else if (state.sellerTab === 'wallet') {
     renderSellerWallet(panel, totalRevenue);
   } else if (state.sellerTab === 'mail') {
+    if (unreadMails > 0) {
+      (state.notifications || []).forEach((n) => { n.is_read = true; });
+      state.unreadNotifs = 0;
+      updateNavRole();
+      supabase.from('notifications').update({ is_read: true }).eq('user_id', state.user.id).then();
+    }
     renderSellerMail(panel);
   }
 }
@@ -2330,17 +2342,16 @@ function renderSellerMail(panel) {
   if (btnMarkAll) {
     btnMarkAll.addEventListener('click', async () => {
       btnMarkAll.disabled = true;
+      (state.notifications || []).forEach((n) => { n.is_read = true; });
+      state.unreadNotifs = 0;
+      updateNavRole();
       const { error } = await supabase.rpc('mark_all_notifications_read');
-      if (!error) {
-        toast('Semua surat ditandai sudah dibaca');
-        await loadNotifications();
-        loadSeller();
-      } else {
+      if (error) {
         await supabase.from('notifications').update({ is_read: true }).eq('user_id', state.user.id);
-        toast('Semua surat ditandai sudah dibaca');
-        await loadNotifications();
-        loadSeller();
       }
+      toast('Semua surat ditandai sudah dibaca');
+      await loadNotifications();
+      loadSeller();
     });
   }
 
@@ -2368,6 +2379,10 @@ function renderSellerMail(panel) {
     b.addEventListener('click', async () => {
       const id = b.getAttribute('data-read-id');
       b.disabled = true;
+      const target = (state.notifications || []).find((n) => n.id === id);
+      if (target) target.is_read = true;
+      state.unreadNotifs = (state.notifications || []).filter((n) => !n.is_read && n.type !== 'bid_placed').length;
+      updateNavRole();
       await supabase.from('notifications').update({ is_read: true }).eq('id', id);
       await loadNotifications();
       renderSellerMail(panel);
@@ -2425,6 +2440,7 @@ function updateNavRole() {
       badge.textContent = state.unreadNotifs;
       badge.style.display = 'inline-flex';
     } else {
+      badge.textContent = '';
       badge.style.display = 'none';
     }
   }
