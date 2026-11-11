@@ -2458,17 +2458,28 @@ function updateNavRole() {
 }
 
 /* ================= Realtime & routing ================= */
+function refreshBlockedNow() {
+  // Jangan render ulang saat pengguna sedang mengetik, membuka modal,
+  // atau mengisi form Buat Lelang — supaya isian tidak hilang.
+  const ae = document.activeElement;
+  if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName)) return true;
+  if (!$('confirmModal').classList.contains('hidden')) return true;
+  if (!$('authModal').classList.contains('hidden')) return true;
+  if (currentView() === 'admin' && state.adminTab === 'create') return true;
+  return false;
+}
 function scheduleRefresh() {
   clearTimeout(state.refreshTimer);
   state.refreshTimer = setTimeout(async () => {
+    if (refreshBlockedNow()) { scheduleRefresh(); return; }
     const slug = currentDetailSlug();
     const view = currentView();
     await loadData(false);
     await loadUserCollections();
-    if (state.user) await loadNotifications();
+    if (state.user) { await loadNotifications(); await loadWallet(true); }
     if (slug) await loadDetail(slug);
     else if (view === 'watchlist') renderWatchlist();
-    else if (view === 'wallet') { await loadWallet(true); renderWallet(); }
+    else if (view === 'wallet') renderWallet();
     else if (view === 'seller') renderSellerGate();
     else if (view === 'admin' && state.isAdmin) loadAdmin();
   }, 400);
@@ -2480,8 +2491,18 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'auctions' }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, scheduleRefresh)
-    .subscribe();
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_admin_actions' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlists' }, scheduleRefresh)
+    .subscribe((status) => { if (status === 'SUBSCRIBED') scheduleRefresh(); });
 }
+// Jaring pengaman sinkronisasi: sinkronkan ulang saat tab kembali aktif,
+// saat koneksi internet pulih, dan berkala selama tab terlihat —
+// supaya data selalu terbaru walau ada event realtime yang terlewat.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleRefresh(); });
+window.addEventListener('online', () => scheduleRefresh());
+setInterval(() => { if (!document.hidden) scheduleRefresh(); }, 30000);
 // Cleanup sederhana saat halaman ditutup / disembunyikan
 window.addEventListener('beforeunload', () => {
   if (state.realtimeChannel) supabase.removeChannel(state.realtimeChannel);
