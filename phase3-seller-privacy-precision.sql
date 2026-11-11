@@ -98,42 +98,48 @@ BEGIN
 
   v_prev_bidder := v_auction.highest_bidder_id;
   v_prev_amount := v_auction.current_highest_bid;
-  IF v_prev_amount IS NULL THEN 
+  IF v_prev_amount IS NULL OR v_prev_amount = 0 THEN 
     v_required := v_auction.starting_price;
   ELSE 
     v_required := v_prev_amount + v_auction.minimum_increment; 
   END IF;
 
-  -- ============================================================
-  -- KASUS 1: DETEKSI KONKURENSI TIE (NOMINAL SAMA DENGAN BID TERDEPAN)
-  -- Dua penawar (misal Siti dan Budi) menawar angka yang sama di detik yang sama.
-  -- Transaksi yang masuk lebih dulu memegang prioritas (First-Come First-Served),
-  -- sementara transaksi kedua tetap dicatat di ledger bids dengan status 'Kalah Cepat'
-  -- sebagai bukti audit sistem terdistribusi.
-  -- ============================================================
-  IF v_prev_amount IS NOT NULL AND p_amount = v_prev_amount THEN
-    IF v_prev_bidder = v_user THEN
-      RETURN jsonb_build_object('success', false, 'error', 'You are already the highest bidder');
-    END IF;
+  -- 1. Penawar tertinggi tidak boleh menawar lelang miliknya sendiri
+  IF v_prev_bidder = v_user THEN
+    RETURN jsonb_build_object('success', false, 'error', 'You are already the highest bidder');
+  END IF;
 
-    -- Validasi saldo wallet penawar
-    v_wallet := public._get_or_create_wallet(v_user);
-    IF v_wallet.status <> 'active' THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Wallet is not active', 'code', 'WALLET_INACTIVE');
-    END IF;
-    IF v_wallet.available_balance < p_amount THEN
-      RETURN jsonb_build_object('success', false,
-        'error', 'Saldo Anda tidak mencukupi untuk melakukan penawaran ini.',
-        'code', 'INSUFFICIENT_BALANCE', 'available_balance', v_wallet.available_balance);
-    END IF;
+  -- 2. Cek apakah nominal di bawah starting price absolut
+  IF p_amount < v_auction.starting_price THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Bid must be at least the starting price', 'starting_price', v_auction.starting_price);
+  END IF;
 
-    -- Buka kunci izin mutasi tabel bids khusus sesi transaksi ini
+  -- 3. Validasi saldo dompet penawar
+  v_wallet := public._get_or_create_wallet(v_user);
+  IF v_wallet.status <> 'active' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Wallet is not active', 'code', 'WALLET_INACTIVE');
+  END IF;
+  IF v_wallet.available_balance < p_amount THEN
+    RETURN jsonb_build_object('success', false,
+      'error', 'Saldo Anda tidak mencukupi untuk melakukan penawaran ini.',
+      'code', 'INSUFFICIENT_BALANCE', 'available_balance', v_wallet.available_balance);
+  END IF;
+
+  -- ============================================================
+  -- KASUS 1: DETEKSI KONKURENSI TIE / KALAH CEPAT (Outpaced by Milliseconds)
+  -- Terjadi saat dua penawar menawar di detik yang sama:
+  -- Penawar 1 masuk lebih dulu dan berhasil menaikkan status lelang.
+  -- Penawar 2 (kalah beberapa milidetik) menawar nominal yang sudah tidak memenuhi v_required.
+  -- Solusi Terdistribusi: Tetap CATAT bid Penawar 2 ke tabel bids sebagai bukti audit sistem!
+  -- Saldo Penawar 2 TIDAK terpotong (aman).
+  -- ============================================================
+  IF p_amount < v_required THEN
     PERFORM set_config('lelangku.allow_bid_mutation', 'on', true);
 
     SELECT COALESCE(MAX(bid_sequence), 0) + 1 INTO v_sequence
     FROM public.bids WHERE auction_id = p_auction_id;
 
-    -- Catat penawaran kedua ke tabel bids (bukti audit terdistribusi)
+    -- Catat penawaran ke tabel bids (audit log konkurensi terdistribusi)
     INSERT INTO public.bids (auction_id, bidder_id, amount, bid_sequence)
     VALUES (p_auction_id, v_user, p_amount, v_sequence)
     RETURNING id, created_at INTO v_bid_id, v_created_at;
@@ -141,7 +147,7 @@ BEGIN
     -- Surat notifikasi untuk penawar yang kalah cepat
     INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
     VALUES (v_user, p_auction_id, 'outbid', '⚡ Tawaran Konkurensi: Kalah Cepat Terkunci',
-      'Tawaran nominal sama Anda sebesar Rp' || to_char(p_amount, 'FM999,999,999,999') || ' tercatat di ledger sistem (Urutan #' || v_sequence || '), namun kalah cepat beberapa milidetik dari penawar sebelumnya (First-Come First-Served).',
+      'Tawaran Anda sebesar Rp' || to_char(p_amount, 'FM999,999,999,999') || ' tercatat di ledger sistem (Urutan #' || v_sequence || '), namun kalah cepat beberapa milidetik dari penawar sebelumnya (First-Come First-Served).',
       jsonb_build_object('amount', p_amount, 'bid_id', v_bid_id, 'status', 'outpaced_tie'));
 
     RETURN jsonb_build_object(
@@ -159,24 +165,9 @@ BEGIN
     );
   END IF;
 
-  -- KASUS 2: VALIDASI BID LEBIH TINGGI STANDAR
-  IF p_amount < v_required THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Bid is too low', 'minimum_required', v_required);
-  END IF;
-  IF v_prev_bidder = v_user THEN
-    RETURN jsonb_build_object('success', false, 'error', 'You are already the highest bidder');
-  END IF;
-
-  -- Validasi saldo wallet
-  v_wallet := public._get_or_create_wallet(v_user);
-  IF v_wallet.status <> 'active' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Wallet is not active', 'code', 'WALLET_INACTIVE');
-  END IF;
-  IF v_wallet.available_balance < p_amount THEN
-    RETURN jsonb_build_object('success', false,
-      'error', 'Saldo Anda tidak mencukupi untuk melakukan penawaran ini.',
-      'code', 'INSUFFICIENT_BALANCE', 'available_balance', v_wallet.available_balance);
-  END IF;
+  -- ============================================================
+  -- KASUS 2: BID SAH TERDEPAN (Pemenang Sementara / Highest Bidder)
+  -- ============================================================
 
   -- Buka kunci izin mutasi tabel bids khusus sesi transaksi ini
   PERFORM set_config('lelangku.allow_bid_mutation', 'on', true);
