@@ -22,7 +22,7 @@ ALTER TABLE public.wallet_transactions ADD CONSTRAINT wallet_transactions_transa
     'Refund',
     'Wallet Adjustment'
   )
-);
+); 
 
 -- ============================================================
 -- 3. PERLINDUNGAN ANTI-BYPASS SQL (Anti-Cheat / Anti-Injection)
@@ -624,4 +624,14 @@ GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
 -- Agar kotak masuk seller bersih dari spam dan hanya berisi Surat Laporan Hasil Akhir & Pencairan
 -- ============================================================
 DELETE FROM public.notifications WHERE type = 'bid_placed';
+
+-- ============================================================
+-- 11. HAK AKSES ADMIN POSTING LELANG KONSINYASI MILIK SELLER
+-- Memungkinkan Admin membuat lelang dengan memilih seller_id milik akun penjual
+-- ============================================================
+DROP POLICY IF EXISTS auctions_insert_seller ON public.auctions;
+DROP POLICY IF EXISTS auctions_insert_seller_or_admin ON public.auctions;
+CREATE POLICY auctions_insert_seller_or_admin ON public.auctions
+  FOR INSERT WITH CHECK (seller_id = auth.uid() OR public.is_admin());
+
 

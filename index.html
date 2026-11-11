@@ -1454,15 +1454,36 @@ async function adminWalletAdjust(userId, mode) {
 }
 
 /* ---------- Admin: Buat Lelang ---------- */
-function renderAdminCreate() {
+async function renderAdminCreate() {
   const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+
+  let sellers = [];
+  const { data: profs } = await supabase.from('profiles').select('id,username,full_name,email,role').order('username');
+  if (profs && profs.length) sellers = profs;
+  const defaultSellerId = sellers.find((s) => s.email === 'seller@lelangku.app' || s.role === 'seller')?.id || state.user?.id;
+  const sellerOpts = sellers.map((s) => `
+    <option value="${esc(s.id)}" ${s.id === defaultSellerId ? 'selected' : ''}>
+      ${esc(s.full_name || s.username || 'Seller')} (@${esc(s.username || 'user')}) &middot; ${esc(s.email || '')} [${esc(s.role || 'user')}]
+    </option>
+  `).join('');
+
   const catOpts = state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   const presets = [[5, '5m'], [10, '10m'], [15, '15m'], [30, '30m'], [60, '1j'], [120, '2j'], [180, '3j'], [360, '6j'], [720, '12j'], [1440, '24j'], [2880, '2 hari'], [4320, '3 hari'], [10080, '7 hari']];
   panel.innerHTML = `
   <form id="createForm">
     <div class="two-col">
       <div>
-        <div class="form-sec"><h3>A — Info Barang</h3><p class="sub">Detail barang yang dilelang.</p>
+        <div class="form-sec"><h3>A — Info Barang & Konsinyasi Seller</h3><p class="sub">Pilih akun seller yang menitipkan barang lelang, lalu isi detail lelang.</p>
+          <div class="field" style="background:rgba(214,168,79,0.08);border:1px solid var(--gold);padding:14px;border-radius:10px;margin-bottom:16px">
+            <label style="font-weight:700;color:var(--navy);font-size:14px">🤝 Pemilik Barang / Akun Seller (Konsinyasi) *</label>
+            <select id="cfSeller" required style="width:100%;margin-top:6px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);font-size:13.5px;font-weight:600">
+              ${sellerOpts}
+            </select>
+            <small style="color:var(--muted);font-size:12px;display:block;margin-top:5px">
+              Admin bertindak sebagai kurator & penerbit resmi lelang. Barang otomatis masuk ke <b>Seller Hub</b> akun di atas untuk dipantau secara live, dan hasil penjualan cair ke dompet seller tersebut.
+            </small>
+          </div>
           <div class="field"><label>Judul *</label><input id="cfTitle" required placeholder="mis. MacBook Pro 14 inci"></div>
           <div class="form-grid">
             <div class="field"><label>Kategori *</label><select id="cfCategory">${catOpts}</select></div>
@@ -1533,8 +1554,11 @@ function renderAdminCreate() {
   };
   const updateSummary = () => {
     const { start, end } = computeTimes();
+    const selSeller = sellers.find((s) => s.id === $('cfSeller')?.value);
+    const sellerLabel = selSeller ? (selSeller.full_name || selSeller.username || selSeller.email) : 'Seller Terpilih';
     $('cfEndPreview').textContent = fmtJakarta(end);
     $('cfSummary').innerHTML = `
+      <div>Pemilik (Seller): <b>${esc(sellerLabel)}</b></div>
       <div>Judul: <b>${esc($('cfTitle').value || '—')}</b></div>
       <div>Kategori: <b>${esc(state.categories.find((c) => c.id === $('cfCategory').value)?.name || '—')}</b></div>
       <div>Base Price: <b>${rp(Number($('cfStart').value) || 0)}</b></div>
@@ -1576,8 +1600,9 @@ function renderAdminCreate() {
     const summary = `${$('cfTitle').value} — Base ${rp(Number($('cfStart').value))}, selesai ${fmtJakarta(end)}, status ${status}.`;
     const conf = await openConfirm({ title: 'Buat Lelang Baru?', body: summary, okLabel: 'Ya, Buat Lelang' });
     if (!conf) return;
+    const targetSellerId = $('cfSeller')?.value || state.user.id;
     const payload = {
-      seller_id: state.user.id,
+      seller_id: targetSellerId,
       category_id: $('cfCategory').value || null,
       title: $('cfTitle').value.trim(),
       slug: $('cfTitle').value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + Date.now().toString(36),
@@ -1863,7 +1888,7 @@ async function loadSeller() {
     ['monitor', `📡 Live Monitoring Jualan (${list.length} Barang)`],
     ['mail', unreadMails > 0 ? `📬 Kotak Masuk Surat (${unreadMails})` : '📬 Kotak Masuk Surat'],
     ['wallet', '💰 Omset & Dompet Seller'],
-    ['create', '➕ Pasang Barang Baru']
+    ['create', '🤝 Titip Lelang (Konsinyasi)']
   ];
 
   box.innerHTML = `
@@ -2007,126 +2032,100 @@ function renderSellerMonitor(panel, list, hbMap) {
 }
 
 function renderSellerCreate(panel) {
-  const catOpts = state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   panel.innerHTML = `
-    <div class="card" style="padding:24px">
-      <h3 style="margin-top:0">➕ Pasang Barang Lelang Baru</h3>
-      <p class="sub">Barang Anda akan langsung diterbitkan secara live ke Marketplace LelangKu.</p>
-      <form id="sellerCreateForm">
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1">
-            <label>Judul Barang Lelang *</label>
-            <input id="scTitle" required placeholder="mis. Jam Tangan Rolex Submariner Original">
+    <div class="card" style="padding:28px;border-radius:14px;border:1px solid #E2E8F0">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <span style="font-size:32px">🤝</span>
+        <div>
+          <h3 style="margin:0;font-size:20px;color:var(--navy)">Prosedur Konsinyasi & Penerbitan Lelang Resmi</h3>
+          <p style="margin:4px 0 0;font-size:14px;color:var(--muted)">Seluruh barang lelang dikurasi dan diterbitkan secara resmi oleh <b>Admin Platform</b> untuk menjamin legalitas barang dan keamanan transaksi pasar terdistribusi.</p>
+        </div>
+      </div>
+
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:20px;margin-bottom:24px">
+        <h4 style="margin:0 0 14px;font-size:15px;color:var(--navy)">🔄 4 Tahap Alur Konsinyasi (Seller ⇄ Admin):</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;font-size:13.5px">
+          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
+            <b style="color:var(--gold-dark);display:block;margin-bottom:6px">1. Koordinasi Messenger 💬</b>
+            Seller menghubungi Admin via WhatsApp atau Telegram untuk mengirim foto barang, spesifikasi, dan usulan harga.
           </div>
-          <div class="field">
-            <label>Kategori *</label>
-            <select id="scCategory">${catOpts}</select>
+          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
+            <b style="color:#2563EB;display:block;margin-bottom:6px">2. Verifikasi & Kurasi ⚖️</b>
+            Admin memeriksa keaslian barang serta menyepakati Starting Price, Reserve Price, dan jadwal tayang lelang.
           </div>
-          <div class="field">
-            <label>Kondisi Barang</label>
-            <input id="scCondition" placeholder="mis. Baru / Bekas Sangat Baik">
+          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
+            <b style="color:#7C3AED;display:block;margin-bottom:6px">3. Diterbitkan oleh Admin 🏷️</b>
+            Admin membuka <b>Panel Admin &rarr; Buat Lelang</b>, memilih akun Seller Anda, dan menerbitkan lelang ke publik.
           </div>
-          <div class="field" style="grid-column:1/-1">
-            <label>Deskripsi Barang *</label>
-            <textarea id="scDesc" rows="4" required placeholder="Jelaskan spesifikasi, kelengkapan, dan kondisi barang selengkap-lengkapnya…"></textarea>
-          </div>
-          <div class="field">
-            <label>Harga Mulai / Starting Price (Rp) *</label>
-            <input id="scStart" type="number" min="1000" required placeholder="1000000">
-          </div>
-          <div class="field">
-            <label>Kelipatan Minimum Bid (Rp) *</label>
-            <input id="scInc" type="number" min="1000" value="50000" required>
-          </div>
-          <div class="field">
-            <label>Reserve Price / Batas Cadangan (Rp, Opsional)</label>
-            <input id="scReserve" type="number" min="0" placeholder="Batas minimum agar barang sah terjual">
-            <small style="color:var(--muted);font-size:11.5px">Jika penawaran tertinggi di akhir lelang belum mencapai harga ini, barang batal terjual secara aman.</small>
-          </div>
-          <div class="field">
-            <label>Buy Now Price / Beli Langsung (Rp, Opsional)</label>
-            <input id="scBuyNow" type="number" min="0" placeholder="Harga beli langsung seketika">
-            <small style="color:var(--muted);font-size:11.5px">Pembeli dapat langsung membeli tanpa lelang seharga nominal ini.</small>
-          </div>
-          <div class="field">
-            <label>Durasi Lelang *</label>
-            <select id="scDuration">
-              <option value="5">5 Menit (Demo Cepat)</option>
-              <option value="15">15 Menit</option>
-              <option value="60">1 Jam</option>
-              <option value="1440" selected>24 Jam (1 Hari)</option>
-              <option value="4320">3 Hari</option>
-              <option value="10080">7 Hari</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>URL Foto Barang</label>
-            <input id="scImage" placeholder="https://… link foto barang">
+          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
+            <b style="color:#059669;display:block;margin-bottom:6px">4. Masuk Akun & Dompet 💰</b>
+            Lelang otomatis aktif di <b>Live Monitoring Jualan</b> Anda. Hasil penjualan lelang langsung 100% cair ke Dompet Anda!
           </div>
         </div>
-        <div class="bid-msg" id="scMsg" style="margin-top:14px"></div>
-        <button class="btn btn-gold" type="submit" id="scSubmitBtn" style="margin-top:14px;padding:12px 24px">🚀 Publikasikan Lelang Sekarang</button>
-      </form>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <a class="btn btn-gold" href="https://wa.me/?text=Halo%20Admin%20LelangKu,%20saya%20ingin%20mengajukan%20konsinyasi%20barang%20lelang%20baru" target="_blank" rel="noopener">
+          💬 Hubungi Admin via WhatsApp
+        </a>
+        ${state.isAdmin ? `
+        <a class="btn btn-navy" href="#/admin" onclick="state.adminTab='create';">
+          ⚙️ Buka Form Buat Lelang Admin (Konsinyasi) &rarr;
+        </a>` : ''}
+        <button class="btn btn-light" type="button" id="btnToggleDraftForm">
+          📝 Tulis Draf Pengajuan Barang
+        </button>
+      </div>
+
+      <div id="draftFormArea" style="display:none;margin-top:24px;border-top:1px dashed var(--line);padding-top:20px">
+        <h4 style="margin:0 0 10px;font-size:15px">Formulir Pengajuan Titip Lelang ke Admin</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Isi ringkasan ini untuk disalin dan dikirimkan ke Admin via messenger:</p>
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1">
+            <label>Nama / Judul Barang</label>
+            <input id="propTitle" placeholder="mis. iPhone 15 Pro Max 256GB">
+          </div>
+          <div class="field">
+            <label>Usulan Harga Mulai (Rp)</label>
+            <input id="propStart" type="number" placeholder="mis. 12000000">
+          </div>
+          <div class="field">
+            <label>Usulan Reserve Price (Rp)</label>
+            <input id="propReserve" type="number" placeholder="mis. 15000000">
+          </div>
+          <div class="field" style="grid-column:1/-1">
+            <label>Keterangan & Kondisi Barang</label>
+            <textarea id="propDesc" rows="3" placeholder="Kelengkapan unit, minus jika ada, garansi…"></textarea>
+          </div>
+        </div>
+        <button class="btn btn-navy btn-sm" type="button" id="btnCopyProposal" style="margin-top:10px">
+          📋 Salin Format Pesan untuk WhatsApp/Telegram Admin
+        </button>
+      </div>
     </div>
   `;
 
-  $('sellerCreateForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = $('scSubmitBtn');
-    const msg = $('scMsg');
-    const show = (ok, t) => { msg.className = 'bid-msg ' + (ok ? 'ok' : 'err'); msg.textContent = t; };
+  const btnToggle = $('btnToggleDraftForm');
+  if (btnToggle) {
+    btnToggle.addEventListener('click', () => {
+      const area = $('draftFormArea');
+      if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
+    });
+  }
 
-    const title = $('scTitle').value.trim();
-    const startPrice = Number($('scStart').value) || 0;
-    const durMins = Number($('scDuration').value) || 1440;
-    const now = new Date();
-    const end = new Date(now.getTime() + durMins * 60000);
-
-    btn.disabled = true;
-    btn.textContent = 'Menerbitkan Lelang…';
-
-    const payload = {
-      seller_id: state.user.id,
-      category_id: $('scCategory').value || null,
-      title,
-      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + Date.now().toString(36),
-      description: $('scDesc').value.trim() || null,
-      condition: $('scCondition').value.trim() || null,
-      starting_price: startPrice,
-      minimum_increment: Number($('scInc').value) || 50000,
-      reserve_price: $('scReserve').value ? Number($('scReserve').value) : null,
-      buy_now_price: $('scBuyNow').value ? Number($('scBuyNow').value) : null,
-      start_time: now.toISOString(),
-      end_time: end.toISOString(),
-      status: 'Live',
-      anti_sniping_enabled: true,
-      extension_threshold_seconds: 30,
-      extension_duration_seconds: 120
-    };
-
-    const { data, error } = await supabase.from('auctions').insert(payload).select('id,slug').single();
-    btn.disabled = false;
-    btn.textContent = '🚀 Publikasikan Lelang Sekarang';
-
-    if (error) {
-      show(false, 'Gagal membuat lelang: ' + error.message);
-      return;
-    }
-
-    if ($('scImage').value.trim()) {
-      await supabase.from('auction_images').insert({
-        auction_id: data.id,
-        image_url: $('scImage').value.trim(),
-        is_primary: true,
-        sort_order: 0
+  const btnCopy = $('btnCopyProposal');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      const t = $('propTitle').value.trim() || 'Barang Lelang';
+      const s = $('propStart').value ? rp(Number($('propStart').value)) : 'Rp0';
+      const r = $('propReserve').value ? rp(Number($('propReserve').value)) : 'Tidak ada';
+      const d = $('propDesc').value.trim() || '-';
+      const text = `Halo Admin LelangKu, saya ingin mengajukan konsinyasi lelang:\n• Barang: ${t}\n• Usulan Mulai: ${s}\n• Target Minimum (Reserve): ${r}\n• Kondisi: ${d}\n• ID Akun Seller Saya: ${state.user?.id || 'seller'}`;
+      navigator.clipboard.writeText(text).then(() => {
+        toast('Format pesan berhasil disalin! Silakan paste ke WhatsApp/Telegram Admin.');
       });
-    }
-
-    toast('🎉 Lelang Anda berhasil dipublikasikan!');
-    state.sellerTab = 'monitor';
-    await loadData(false);
-    loadSeller();
-  });
+    });
+  }
 }
 
 function renderSellerWallet(panel, totalRevenue) {
