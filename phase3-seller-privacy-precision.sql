@@ -97,6 +97,68 @@ BEGIN
     v_required := v_prev_amount + v_auction.minimum_increment; 
   END IF;
 
+  -- ============================================================
+  -- KASUS 1: DETEKSI KONKURENSI TIE (NOMINAL SAMA DENGAN BID TERDEPAN)
+  -- Dua penawar (misal Siti dan Budi) menawar angka yang sama di detik yang sama.
+  -- Transaksi yang masuk lebih dulu memegang prioritas (First-Come First-Served),
+  -- sementara transaksi kedua tetap dicatat di ledger bids dengan status 'Kalah Cepat'
+  -- sebagai bukti audit sistem terdistribusi.
+  -- ============================================================
+  IF v_prev_amount IS NOT NULL AND p_amount = v_prev_amount THEN
+    IF v_prev_bidder = v_user THEN
+      RETURN jsonb_build_object('success', false, 'error', 'You are already the highest bidder');
+    END IF;
+
+    -- Validasi saldo wallet penawar
+    v_wallet := public._get_or_create_wallet(v_user);
+    IF v_wallet.status <> 'active' THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Wallet is not active', 'code', 'WALLET_INACTIVE');
+    END IF;
+    IF v_wallet.available_balance < p_amount THEN
+      RETURN jsonb_build_object('success', false,
+        'error', 'Saldo Anda tidak mencukupi untuk melakukan penawaran ini.',
+        'code', 'INSUFFICIENT_BALANCE', 'available_balance', v_wallet.available_balance);
+    END IF;
+
+    -- Buka kunci izin mutasi tabel bids khusus sesi transaksi ini
+    PERFORM set_config('lelangku.allow_bid_mutation', 'on', true);
+
+    SELECT COALESCE(MAX(bid_sequence), 0) + 1 INTO v_sequence
+    FROM public.bids WHERE auction_id = p_auction_id;
+
+    -- Catat penawaran kedua ke tabel bids (bukti audit terdistribusi)
+    INSERT INTO public.bids (auction_id, bidder_id, amount, bid_sequence)
+    VALUES (p_auction_id, v_user, p_amount, v_sequence)
+    RETURNING id, created_at INTO v_bid_id, v_created_at;
+
+    -- Surat notifikasi untuk penawar yang kalah cepat
+    INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
+    VALUES (v_user, p_auction_id, 'outbid', '⚡ Tawaran Konkurensi: Kalah Cepat Terkunci',
+      'Tawaran nominal sama Anda sebesar Rp' || to_char(p_amount, 'FM999,999,999,999') || ' tercatat di ledger sistem (Urutan #' || v_sequence || '), namun kalah cepat beberapa milidetik dari penawar sebelumnya (First-Come First-Served).',
+      jsonb_build_object('amount', p_amount, 'bid_id', v_bid_id, 'status', 'outpaced_tie'));
+
+    -- Surat notifikasi untuk Seller (ada persaingan harga sama di lelangnya)
+    INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
+    VALUES (v_auction.seller_id, p_auction_id, 'bid_placed', '⚡ Persaingan Nominal Sama di Lelang Anda',
+      'Terjadi persaingan penawaran dengan nominal sama Rp' || to_char(p_amount, 'FM999,999,999,999') || ' pada "' || v_auction.title || '". Sistem memenangkan transaksi yang masuk lebih awal.',
+      jsonb_build_object('amount', p_amount, 'bid_id', v_bid_id, 'bid_sequence', v_sequence));
+
+    RETURN jsonb_build_object(
+      'success', true,
+      'tied_outpaced', true,
+      'code', 'CONCURRENT_TIE_OUTPACED',
+      'message', '⚡ Konkurensi Terdeteksi: Bid Anda sebesar Rp' || to_char(p_amount, 'FM999,999,999,999') || ' berhasil dicatat di ledger sistem (#' || v_sequence || '), namun kalah cepat beberapa milidetik dari penawar sebelumnya (First-Come First-Served). Status: Kalah Cepat.',
+      'bid_id', v_bid_id,
+      'bid_sequence', v_sequence,
+      'created_at_iso', v_created_at,
+      'current_highest_bid', v_auction.current_highest_bid,
+      'highest_bidder_id', v_prev_bidder,
+      'wallet_available', v_wallet.available_balance,
+      'wallet_reserved', v_wallet.reserved_balance
+    );
+  END IF;
+
+  -- KASUS 2: VALIDASI BID LEBIH TINGGI STANDAR
   IF p_amount < v_required THEN
     RETURN jsonb_build_object('success', false, 'error', 'Bid is too low', 'minimum_required', v_required);
   END IF;
@@ -422,10 +484,67 @@ BEGIN
 END; $$;
 
 -- ============================================================
--- 8. GRANT HAK AKSES EKSEKUSI RPC
+-- 8. HELPER: NOTIFIKASI & SURAT SELLER (MAIL SYSTEM)
+-- Mengirim surat uji coba dan menandai pesan dibaca
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.send_test_notification(p_title text DEFAULT NULL, p_message text DEFAULT NULL, p_type text DEFAULT 'general')
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user uuid := auth.uid();
+  v_notif_id uuid;
+  v_ntype public.notification_type;
+BEGIN
+  IF v_user IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Must be logged in');
+  END IF;
+
+  BEGIN
+    v_ntype := p_type::public.notification_type;
+  EXCEPTION WHEN OTHERS THEN
+    v_ntype := 'general'::public.notification_type;
+  END;
+
+  INSERT INTO public.notifications (user_id, type, title, message, metadata)
+  VALUES (
+    v_user, 
+    v_ntype, 
+    COALESCE(p_title, '📬 Surat Uji Coba Sistem Terdistribusi'),
+    COALESCE(p_message, 'Pesan ini dikirimkan otomatis melalui Pub/Sub Notification Engine untuk menguji fungsionalitas kotak surat seller/peserta lelang.'),
+    jsonb_build_object('source', 'manual_test', 'timestamp', now())
+  )
+  RETURNING id INTO v_notif_id;
+
+  RETURN jsonb_build_object('success', true, 'notification_id', v_notif_id);
+END; $$;
+
+CREATE OR REPLACE FUNCTION public.mark_all_notifications_read()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user uuid := auth.uid();
+BEGIN
+  IF v_user IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Must be logged in');
+  END IF;
+
+  UPDATE public.notifications 
+  SET is_read = true 
+  WHERE user_id = v_user AND is_read = false;
+
+  RETURN jsonb_build_object('success', true);
+END; $$;
+
+-- Pastikan tabel notifications ikut siaran Supabase Realtime
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+EXCEPTION WHEN duplicate_object THEN NULL; WHEN undefined_object THEN NULL; END $$;
+
+-- ============================================================
+-- 9. GRANT HAK AKSES EKSEKUSI RPC
 -- ============================================================
 GRANT EXECUTE ON FUNCTION public.place_bid_with_wallet(uuid, bigint) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.buy_now_with_wallet(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.finalize_auction(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.become_seller() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.send_test_notification(text, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
 
