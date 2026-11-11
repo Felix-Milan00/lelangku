@@ -29,14 +29,15 @@ img{display:block;max-width:100%}
 
 /* ---------- Header ---------- */
 header.site{position:sticky;top:0;z-index:50;background:var(--navy);color:#fff;box-shadow:0 2px 12px rgba(0,0,0,.25)}
-.nav{display:flex;align-items:center;gap:20px;height:64px}
-.logo{font-size:22px;font-weight:800;letter-spacing:.2px;white-space:nowrap}
+.nav{display:flex;align-items:center;gap:14px;height:64px}
+.logo{font-size:22px;font-weight:800;letter-spacing:.2px;white-space:nowrap;flex-shrink:0}
 .logo span{color:var(--gold)}
-.nav-links{display:flex;gap:22px;margin-left:12px;font-size:15px}
-.nav-links a{opacity:.85;padding:6px 2px}
-.nav-links a:hover{opacity:1;color:var(--gold)}
-.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-.user-chip{display:flex;align-items:center;gap:8px;font-size:14px;background:rgba(255,255,255,.1);padding:6px 12px;border-radius:999px;max-width:220px}
+.nav-links{display:flex;align-items:center;gap:12px;margin-left:8px;font-size:14.5px}
+.nav-links a{opacity:.85;padding:6px 6px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;border-radius:6px;transition:.15s}
+.nav-links a:hover{opacity:1;color:var(--gold);background:rgba(255,255,255,.06)}
+#navSellerBadge{display:none;background:#EF4444;color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;line-height:1;margin-left:4px;vertical-align:middle}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.user-chip{display:flex;align-items:center;gap:6px;font-size:13px;background:rgba(255,255,255,.1);padding:5px 10px;border-radius:999px;max-width:160px;white-space:nowrap}
 .user-chip b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 18px;border-radius:10px;font-weight:600;font-size:15px;transition:.15s;border:1px solid transparent}
 .btn-gold{background:var(--gold);color:#1A1A1A}
@@ -251,10 +252,10 @@ footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(255
       <a href="#/" data-nav="marketplace">Marketplace</a>
       <a href="#/watchlist" data-nav="watchlist">&#9733; Watchlist</a>
       <a href="#/wallet" data-nav="wallet" id="navWallet" class="hidden">Wallet</a>
-      <a href="#/seller" data-nav="seller" id="navSeller" class="hidden">🏪 Seller Hub<span id="navSellerBadge" style="display:none;background:#EF4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;margin-left:5px;font-weight:700"></span></a>
+      <a href="#/seller" data-nav="seller" id="navSeller" class="hidden">🏪 Seller Hub<span id="navSellerBadge"></span></a>
       <a href="#/admin" data-nav="admin" id="navAdmin" class="hidden">Admin</a>
       <a href="#how">Cara Kerja</a>
-      <a href="#" id="refreshLink">Muat Ulang Data</a>
+      <a href="#" id="refreshLink" title="Muat Ulang Data">🔄 Refresh</a>
     </nav>
     <div class="nav-right" id="authArea">
       <button class="btn btn-outline btn-sm" id="btnLogin">Masuk</button>
@@ -1170,9 +1171,7 @@ function renderAuthArea() {
   const area = $('authArea');
   if (state.user) {
     const label = state.profile?.full_name || state.profile?.username || state.user.user_metadata?.full_name || state.user.email || 'Pengguna';
-    const unreadPill = state.unreadNotifs > 0 ? `<a class="balance-chip" href="#/seller" title="Kotak Surat Masuk" style="background:#EF4444;color:#fff;border-color:#DC2626">📬 <b>${state.unreadNotifs} Surat Baru</b></a>` : '';
     area.innerHTML = `
-      ${unreadPill}
       <a class="balance-chip" id="walletChip" href="#/wallet" title="Buka Wallet">&#128176; <b>Rp0</b>&nbsp;tersedia</a>
       <span class="user-chip" title="${esc(state.user.email || '')}">&#128100; <b>${esc(label)}</b></span>
       <button class="btn btn-outline btn-sm" id="btnLogout" type="button">Keluar</button>`;
@@ -1859,12 +1858,11 @@ async function loadSeller() {
     .filter((a) => a.status === 'Completed')
     .reduce((s, a) => s + Number(a.current_highest_bid || 0), 0);
 
-  const unreadMails = (state.notifications || []).filter((n) => !n.is_read).length;
+  const unreadMails = (state.notifications || []).filter((n) => !n.is_read && n.type !== 'bid_placed').length;
   const tabs = [
     ['monitor', `📡 Live Monitoring Jualan (${list.length} Barang)`],
     ['mail', `📬 Kotak Masuk Surat (${unreadMails})`],
     ['wallet', '💰 Omset & Dompet Seller'],
-    ['privacy', '🛡️ Audit Privasi & Keamanan (Bahan Uji Dosen)'],
     ['create', '➕ Pasang Barang Baru']
   ];
 
@@ -1931,8 +1929,6 @@ async function loadSeller() {
     renderSellerWallet(panel, totalRevenue);
   } else if (state.sellerTab === 'mail') {
     renderSellerMail(panel);
-  } else if (state.sellerTab === 'privacy') {
-    renderSellerPrivacy(panel);
   }
 }
 
@@ -2158,17 +2154,18 @@ function renderSellerWallet(panel, totalRevenue) {
 }
 
 function renderSellerMail(panel) {
-  const notifs = state.notifications || [];
+  // Hanya ambil surat penting (laporan akhir lelang & dompet), abaikan notifikasi bid rutin
+  const notifs = (state.notifications || []).filter((n) => n.type !== 'bid_placed');
   const filter = state.sellerMailFilter || 'all';
 
   let filtered = notifs;
   if (filter === 'unread') filtered = notifs.filter((n) => !n.is_read);
-  else if (filter === 'bid') filtered = notifs.filter((n) => n.type === 'bid_placed' || n.type === 'outbid');
-  else if (filter === 'sale') filtered = notifs.filter((n) => n.type === 'auction_won' || n.type === 'auction_sold' || n.type === 'general');
+  else if (filter === 'sale') filtered = notifs.filter((n) => n.type === 'auction_won' || n.type === 'auction_sold');
+  else if (filter === 'wallet') filtered = notifs.filter((n) => n.type === 'general');
 
   const unreadCount = notifs.filter((n) => !n.is_read).length;
-  const bidCount = notifs.filter((n) => n.type === 'bid_placed' || n.type === 'outbid').length;
-  const saleCount = notifs.filter((n) => n.type === 'auction_won' || n.type === 'auction_sold' || n.type === 'general').length;
+  const saleCount = notifs.filter((n) => n.type === 'auction_won' || n.type === 'auction_sold').length;
+  const walletCount = notifs.filter((n) => n.type === 'general').length;
 
   const mailRows = filtered.length ? filtered.map((n) => {
     let icon = '📬';
@@ -2303,8 +2300,8 @@ function renderSellerMail(panel) {
     <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
       <button class="chip ${filter === 'all' ? 'active' : ''}" type="button" data-mfilter="all">Semua Surat (${notifs.length})</button>
       <button class="chip ${filter === 'unread' ? 'active' : ''}" type="button" data-mfilter="unread">Belum Dibaca (${unreadCount})</button>
-      <button class="chip ${filter === 'bid' ? 'active' : ''}" type="button" data-mfilter="bid">Tawaran Masuk (${bidCount})</button>
-      <button class="chip ${filter === 'sale' ? 'active' : ''}" type="button" data-mfilter="sale">Penjualan & Dompet (${saleCount})</button>
+      <button class="chip ${filter === 'sale' ? 'active' : ''}" type="button" data-mfilter="sale">Surat Hasil Lelang (${saleCount})</button>
+      <button class="chip ${filter === 'wallet' ? 'active' : ''}" type="button" data-mfilter="wallet">Dompet & Transaksi (${walletCount})</button>
     </div>
 
     <div id="mailListContainer">
@@ -2387,234 +2384,6 @@ function renderSellerMail(panel) {
   });
 }
 
-function renderSellerPrivacy(panel) {
-  const user = state.user;
-  const profile = state.profile;
-  const sellerId = user?.id || 'cdc0880d-ae42-43c8-b90a-ccc56ddd0174';
-  const email = user?.email || 'seller@lelangku.app';
-  const role = profile?.role || 'seller';
-
-  panel.innerHTML = `
-    <!-- Top Announcement Banner -->
-    <div style="background:linear-gradient(135deg, #0F172A 0%, #1E293B 100%);border:1px solid #334155;border-radius:14px;padding:22px;margin-bottom:24px;color:#F8FAFC">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <span style="font-size:26px">🛡️</span>
-        <div>
-          <h3 style="margin:0;font-size:18px;color:#F1F5F9">Arsitektur Keamanan & Privasi Seller (Distributed Security Model)</h3>
-          <p style="margin:4px 0 0;font-size:13px;color:#94A3B8">Sistem dirancang dengan prinsip <b>Zero-Knowledge Data Protection</b>, <b>Bcrypt One-Way Hashing</b>, dan <b>Edge Network IP Proxying</b> untuk melindungi privasi seller dari ancaman internal (Admin abuse) maupun eksternal (DDoS, phishing, tracking kompetitor).</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Metrics Grid -->
-    <div class="wallet-grid" style="margin-bottom:24px">
-      <div class="wallet-card" style="border-top:3px solid #10B981">
-        <span style="font-size:12px;color:var(--muted)">Status Password</span>
-        <b style="color:#10B981;font-size:18px">Terenkripsi Bcrypt</b>
-        <p style="font-size:12px;color:var(--muted)">$2a$10$ (Zero Plaintext)</p>
-      </div>
-      <div class="wallet-card" style="border-top:3px solid #3B82F6">
-        <span style="font-size:12px;color:var(--muted)">Privasi Alamat IP</span>
-        <b style="color:#3B82F6;font-size:18px">Terselubung / Masked</b>
-        <p style="font-size:12px;color:var(--muted)">Edge CDN & Supabase Proxy</p>
-      </div>
-      <div class="wallet-card" style="border-top:3px solid #F59E0B">
-        <span style="font-size:12px;color:var(--muted)">Visibilitas Admin</span>
-        <b style="color:#F59E0B;font-size:18px">Zero-Knowledge</b>
-        <p style="font-size:12px;color:var(--muted)">Admin tidak tahu password/IP</p>
-      </div>
-      <div class="wallet-card" style="border-top:3px solid #8B5CF6">
-        <span style="font-size:12px;color:var(--muted)">Integritas Lelang</span>
-        <b style="color:#8B5CF6;font-size:18px">Anti-Shill Bidding</b>
-        <p style="font-size:12px;color:var(--muted)">Strict DB Row Constraints</p>
-      </div>
-    </div>
-
-    <!-- Main Content Cards -->
-    <div style="display:grid;grid-template-columns:1fr;gap:20px">
-      
-      <!-- Card 1: Password Encryption -->
-      <div class="card" style="padding:22px;border:1px solid #E2E8F0;border-radius:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-          <div>
-            <h4 style="margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px">
-              🔑 <span>1. Enkripsi Kata Sandi (Password Hashing via Bcrypt $2a$10$)</span>
-              <span class="badge" style="background:#DCFCE7;color:#166534">Terverifikasi Aman</span>
-            </h4>
-            <p style="margin:0;font-size:13.5px;color:var(--muted)">Bagaimana password akun seller dan penawar dilindungi dari database administrator (DBA) dan Admin platform?</p>
-          </div>
-          <button class="btn btn-gold btn-sm" id="btnTestPasswordAudit">🔍 Buktikan Enkripsi di Browser</button>
-        </div>
-
-        <div style="margin-top:16px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:16px;font-size:13px;line-height:1.6">
-          <ul style="margin:0;padding-left:20px">
-            <li><b>Tidak Ada Plaintext:</b> Password asli (misal: <code>seller123</code> atau kata sandi pribadi Anda) <b>TIDAK PERNAH</b> disimpan di database.</li>
-            <li><b>Fungsi One-Way Hash Kriptografis:</b> Saat mendaftar atau login, Supabase Auth memproses password menggunakan algoritma <code>pgcrypto.crypt(password, gen_salt('bf', 10))</code> (Blowfish Bcrypt 10 rounds).</li>
-            <li><b>Salt Acak 128-bit:</b> Setiap akun diberikan salt unik acak, sehingga dua pengguna dengan password sama persis akan memiliki string hash yang sepenuhnya berbeda di database (kebal terhadap Rainbow Table attack).</li>
-            <li><b>Admin & DBA Tidak Bisa Mengintip:</b> Bahkan jika Admin mengeksekusi <code>SELECT * FROM auth.users</code>, Admin hanya melihat hash acak sepanjang 60 karakter yang mustahil dibalikkan menjadi teks asli (One-Way Trapdoor).</li>
-          </ul>
-        </div>
-
-        <div id="passwordAuditResult" style="margin-top:14px;display:none;background:#0F172A;color:#38BDF8;padding:14px;border-radius:8px;font-family:monospace;font-size:12.5px;line-height:1.6;white-space:pre-wrap"></div>
-      </div>
-
-      <!-- Card 2: IP Address & Network Privacy -->
-      <div class="card" style="padding:22px;border:1px solid #E2E8F0;border-radius:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-          <div>
-            <h4 style="margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px">
-              🌐 <span>2. Privasi Alamat IP & Arsitektur Reverse Proxy Terdistribusi</span>
-              <span class="badge" style="background:#DBEAFE;color:#1E40AF">Terselubung (Zero-IP Leak)</span>
-            </h4>
-            <p style="margin:0;font-size:13.5px;color:var(--muted)">Bagaimana alamat IP seller dicegah agar tidak bocor ke penawar, kompetitor, maupun hacker?</p>
-          </div>
-          <button class="btn btn-light btn-sm" id="btnTestNetworkAudit">🛡️ Audit Kebocoran Kolom IP Database</button>
-        </div>
-
-        <div style="margin-top:16px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:16px;font-size:13px;line-height:1.6">
-          <ul style="margin:0;padding-left:20px">
-            <li><b>Database Bersih dari Alamat IP (Zero-IP Storage):</b> Di seluruh skema publik (<code>auctions</code>, <code>bids</code>, <code>profiles</code>, <code>wallets</code>, <code>notifications</code>), <b>TIDAK ADA kolom IP address</b>. Penawar dan penonton lelang tidak dapat mengekstrak IP penjual.</li>
-            <li><b>Edge Reverse Proxy Shield:</b> Klien seller berkomunikasi melalui Vercel Edge Serverless dan Cloudflare CDN SSL Termination. Permintaan HTTP/WebSocket dibersihkan sehingga IP asal tidak dipublikasikan ke publik.</li>
-            <li><b>Mencegah Serangan Fisik & DDoS:</b> Penjual barang bernilai tinggi (misal BMW X3 Rp612 juta) terlindungi dari Targeted Denial-of-Service (DDoS) saat detik-detik penutupan lelang, serta terlindungi dari pelacakan lokasi fisik (Geolocation stalking).</li>
-            <li><b>Mencegah Disintermediasi:</b> Pembeli nakal tidak bisa menghubungi seller secara diam-diam di luar sistem untuk mengajak COD tanpa perlindungan escrow wallet.</li>
-          </ul>
-        </div>
-
-        <div id="networkAuditResult" style="margin-top:14px;display:none;background:#0F172A;color:#34D399;padding:14px;border-radius:8px;font-family:monospace;font-size:12.5px;line-height:1.6;white-space:pre-wrap"></div>
-      </div>
-
-      <!-- Card 3: Admin Privilege Separation & Data Masking -->
-      <div class="card" style="padding:22px;border:1px solid #E2E8F0;border-radius:12px">
-        <h4 style="margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px">
-          👥 <span>3. Pemisahan Hak Istimewa Admin vs Seller (Least Privilege Principle)</span>
-          <span class="badge" style="background:#FEF3C7;color:#92400E">Data Masking Aktif</span>
-        </h4>
-        <p style="margin:0 0 16px;font-size:13.5px;color:var(--muted)">Admin bertindak sebagai pengawas ekosistem lelang, tetapi tidak berhak menyalahgunakan data privat seller:</p>
-
-        <div class="tbl-wrap">
-          <table class="data">
-            <thead>
-              <tr>
-                <th>Aspek Data</th>
-                <th>Yang Dapat Dilihat Admin</th>
-                <th>Yang Tetap Dirahasiakan (Privasi Seller)</th>
-                <th>Metode Perlindungan</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><b>Kata Sandi (Password)</b></td>
-                <td><span style="color:#EF4444;font-weight:600">❌ TIDAK BISA DILIHAT</span></td>
-                <td>Password asli akun seller</td>
-                <td>One-Way Bcrypt Hashing di <code>auth.users</code></td>
-              </tr>
-              <tr>
-                <td><b>Alamat IP Asli</b></td>
-                <td><span style="color:#EF4444;font-weight:600">❌ TIDAK BISA DILIHAT</span></td>
-                <td>IP jaringan & koordinat fisik seller</td>
-                <td>Edge Proxy Masking (Zero-IP Table)</td>
-              </tr>
-              <tr>
-                <td><b>Surat Hasil Akhir Lelang</b></td>
-                <td><span style="color:var(--muted)">Hanya status lelang global</span></td>
-                <td>Isi pesan notifikasi & surat resmi di Kotak Masuk Seller</td>
-                <td>PostgreSQL Row Level Security (RLS) <code>user_id = auth.uid()</code></td>
-              </tr>
-              <tr>
-                <td><b>Kepemilikan Barang</b></td>
-                <td>ID Katalog & Judul Barang</td>
-                <td>Kredensial akses akun penjual</td>
-                <td>UUID Bindings di tabel <code>auctions.seller_id</code></td>
-              </tr>
-              <tr>
-                <td><b>Manipulasi Penawaran</b></td>
-                <td>Audit log waktu & nominal</td>
-                <td>Integritas penawaran</td>
-                <td>Database Trigger Anti-Bypass & Anti-Shill Bidding</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Card 4: Lecturer Presentation Script -->
-      <div class="card" style="padding:22px;border:2px solid var(--gold);background:rgba(214,168,79,.04);border-radius:12px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <span style="font-size:24px">🎓</span>
-          <div>
-            <h4 style="margin:0;font-size:16px;color:var(--gold-dark)">Panduan Menjelaskan ke Dosen Penguji ("Bahan Skrip Presentasi")</h4>
-            <p style="margin:2px 0 0;font-size:13px;color:var(--muted)">Gunakan poin-poin terstruktur ini saat dosen bertanya mengenai aspek keamanan dan privasi seller di sistem terdistribusi:</p>
-          </div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:14px;font-size:13.5px;line-height:1.6">
-          <div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:#1E293B">Pertanyaan Dosen:</b> <i>"Bagaimana keamanan password seller dan penawar di database Anda? Apakah Admin bisa melihat password orang lain?"</i><br>
-            <b style="color:#059669">Jawaban Anda:</b> "Tidak bisa, Pak. Sistem LelangKu mengadopsi prinsip <b>Zero-Knowledge Password Storage</b> menggunakan algoritma <b>Bcrypt ($2a$10$)</b> dengan <i>cryptographic salt</i> 128-bit acak. Database Supabase PostgreSQL hanya menyimpan hash satu arah sepanjang 60 karakter di skema internal <code>auth.users</code>. Bahkan admin dan DBA tidak memiliki kunci dekripsi karena Bcrypt adalah fungsi <i>one-way mathematical trapdoor</i>."
-          </div>
-
-          <div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:#1E293B">Pertanyaan Dosen:</b> <i>"Bagaimana sistem melindungi alamat IP seller agar tidak dilacak oleh peserta lain atau diserang saat lelang berjalan?"</i><br>
-            <b style="color:#059669">Jawaban Anda:</b> "Dalam arsitektur terdistribusi kami, koneksi klien melewati <b>Edge Reverse Proxy (Vercel CDN & Supabase SSL Gateway)</b> dengan enkripsi HTTPS/TLS 1.3. Seluruh tabel publik (<code>auctions</code>, <code>bids</code>, <code>profiles</code>) dirancang dengan prinsip <b>Zero-IP Exposure</b> (tanpa kolom IP). Penawar lain maupun publik tidak bisa mengetahui IP asal penjual, sehingga mencegah serangan Targeted DDoS maupun pelacakan lokasi fisik penjual."
-          </div>
-
-          <div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:#1E293B">Pertanyaan Dosen:</b> <i>"Apakah seller bisa menaikkan harga barangnya sendiri (shill bidding) atau apakah admin bisa manipulasi data lelang?"</i><br>
-            <b style="color:#059669">Jawaban Anda:</b> "Tidak bisa, Pak. Di database PostgreSQL kami telah memasang constraint ketat: jika <code>seller_id = bidder_id</code>, transaksi otomatis di-REJECT. Selain itu, mutasi tabel <code>bids</code> dilindungi oleh Trigger <code>trg_protect_bids_mutation</code>, sehingga siapa pun yang mencoba <code>INSERT</code> SQL langsung tanpa fungsi RPC resmi akan langsung diblokir dengan error <code>DIRECT_BID_MUTATION_BLOCKED</code>."
-          </div>
-        </div>
-      </div>
-
-    </div>
-  `;
-
-  // Attach interactive audit buttons
-  const btnPass = $('btnTestPasswordAudit');
-  if (btnPass) {
-    btnPass.addEventListener('click', () => {
-      const box = $('passwordAuditResult');
-      if (!box) return;
-      box.style.display = 'block';
-      box.innerHTML = `
-[AUDIT SISTEM OTENTIKASI & ENKRIPSI]
-• Sesi Login Aktif       : ${esc(email)}
-• User UUID (ID Kunci)    : ${esc(sellerId)}
-• Algoritma Enkripsi      : Blowfish Bcrypt ($2a$10$) 1024 Rounds
-• Kolom Database          : auth.users.encrypted_password (Internal Supabase Auth)
-• Plaintext Password Cek : NULL / UNDEFINED (Zero-Plaintext Storage — Tidak Pernah Bocor)
-• Visibilitas Platform    : ZERO-KNOWLEDGE (Admin & DBA tidak bisa membaca teks asli)
-• Status Audit            : ✅ LULUS UJI STANDAR KRIPTOGRAFI
-      `.trim();
-    });
-  }
-
-  const btnNet = $('btnTestNetworkAudit');
-  if (btnNet) {
-    btnNet.addEventListener('click', async () => {
-      const box = $('networkAuditResult');
-      if (!box) return;
-      box.style.display = 'block';
-      box.innerHTML = 'Memeriksa struktur skema tabel database publik…';
-
-      // Inspect auction and profile sample to confirm no IP leak
-      const sampleAuc = state.auctions[0] || {};
-      const aucKeys = Object.keys(sampleAuc).filter((k) => k.toLowerCase().includes('ip') || k.toLowerCase().includes('addr'));
-      const profKeys = state.profile ? Object.keys(state.profile).filter((k) => k.toLowerCase().includes('ip')) : [];
-
-      box.innerHTML = `
-[AUDIT PRIVASI JARINGAN & ALAMAT IP]
-• Reverse Proxy Gateway   : Vercel Edge Global Network & Supabase SSL
-• Protokol Enkripsi Wire  : TLS 1.3 / HTTPS End-to-End
-• Kolom IP di 'auctions'  : ${aucKeys.length === 0 ? '0 Kolom (TERLINDUNGI DARI PUBLIK)' : aucKeys.join(', ')}
-• Kolom IP di 'profiles'  : ${profKeys.length === 0 ? '0 Kolom (TERLINDUNGI DARI PUBLIK)' : profKeys.join(', ')}
-• Akses Penawar ke IP     : DIBLOKIR TOTAL (Penawar hanya menerima WebSocket broadcast tanpa IP)
-• Risiko Targeted DDoS    : DIMINIMALISIR OLEH DISTRIBUTED CDN EDGE
-• Status Audit            : ✅ LULUS UJI PRIVASI JARINGAN TERDISTRIBUSI
-      `.trim();
-    });
-  }
-}
-
 async function loadNotifications() {
   if (!state.user) {
     state.notifications = [];
@@ -2627,6 +2396,7 @@ async function loadNotifications() {
     .from('notifications')
     .select('*')
     .eq('user_id', state.user.id)
+    .neq('type', 'bid_placed')
     .order('created_at', { ascending: false });
   if (!error && data) {
     state.notifications = data;
@@ -2653,7 +2423,7 @@ function updateNavRole() {
   if (badge) {
     if (state.unreadNotifs > 0) {
       badge.textContent = state.unreadNotifs;
-      badge.style.display = 'inline-block';
+      badge.style.display = 'inline-flex';
     } else {
       badge.style.display = 'none';
     }

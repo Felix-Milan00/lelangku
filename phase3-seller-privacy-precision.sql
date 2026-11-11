@@ -144,29 +144,6 @@ BEGIN
       'Tawaran nominal sama Anda sebesar Rp' || to_char(p_amount, 'FM999,999,999,999') || ' tercatat di ledger sistem (Urutan #' || v_sequence || '), namun kalah cepat beberapa milidetik dari penawar sebelumnya (First-Come First-Served).',
       jsonb_build_object('amount', p_amount, 'bid_id', v_bid_id, 'status', 'outpaced_tie'));
 
-    -- Surat notifikasi untuk Seller (ada persaingan harga sama di lelangnya)
-    INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
-    VALUES (
-      v_auction.seller_id,
-      p_auction_id,
-      'bid_placed',
-      '⚡ Persaingan Nominal Sama di Lelang: ' || v_auction.title,
-      'Terjadi penawaran dengan nominal sama di detik yang sama pada "' || v_auction.title || '"' || chr(10) ||
-      '• Penawar: ' || v_bidder_name || ' (@' || v_bidder_username || ')' || chr(10) ||
-      '• Nominal: Rp' || to_char(p_amount, 'FM999,999,999,999') || chr(10) ||
-      '• Urutan Bid: #' || v_sequence || chr(10) ||
-      '• Status: Kalah Cepat (+beberapa milidetik). Penawar pertama tetap memegang prioritas transaksi.',
-      jsonb_build_object(
-        'amount', p_amount,
-        'bid_id', v_bid_id,
-        'bid_sequence', v_sequence,
-        'bidder_name', v_bidder_name,
-        'bidder_username', v_bidder_username,
-        'auction_title', v_auction.title,
-        'status', 'concurrent_tie_outpaced'
-      )
-    );
-
     RETURN jsonb_build_object(
       'success', true,
       'tied_outpaced', true,
@@ -259,26 +236,6 @@ BEGIN
       highest_bidder_id = v_user, 
       end_time = v_new_end 
   WHERE id = p_auction_id;
-
-  INSERT INTO public.notifications (user_id, auction_id, type, title, message, metadata)
-  VALUES (
-    v_auction.seller_id, 
-    p_auction_id, 
-    'bid_placed', 
-    '🏷️ Penawaran Baru: "' || v_auction.title || '"',
-    'Ada penawaran baru masuk pada barang Anda "' || v_auction.title || '"' || chr(10) ||
-    '• Penawar: ' || v_bidder_name || ' (@' || v_bidder_username || ')' || chr(10) ||
-    '• Nominal Bid: Rp' || to_char(p_amount, 'FM999,999,999,999') || chr(10) ||
-    '• Urutan Bid: #' || v_sequence,
-    jsonb_build_object(
-      'amount', p_amount,
-      'bid_id', v_bid_id,
-      'bid_sequence', v_sequence,
-      'bidder_name', v_bidder_name,
-      'bidder_username', v_bidder_username,
-      'auction_title', v_auction.title
-    )
-  );
 
   RETURN jsonb_build_object(
     'success', true, 
@@ -661,4 +618,10 @@ GRANT EXECUTE ON FUNCTION public.finalize_auction(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.become_seller() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.send_test_notification(text, text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
+
+-- ============================================================
+-- 10. BERSIHKAN NOTIFIKASI TIPE BID LAMA
+-- Agar kotak masuk seller bersih dari spam dan hanya berisi Surat Laporan Hasil Akhir & Pencairan
+-- ============================================================
+DELETE FROM public.notifications WHERE type = 'bid_placed';
 
