@@ -686,6 +686,7 @@ function renderCategories() {
   const stSel = $('filterStatus');
   const curSt = stSel.value;
   const statuses = [...new Set(state.auctions.map((a) => a.status).filter(Boolean))];
+  if (state.auctions.some((a) => effectiveStatus(a) === 'Berakhir') && !statuses.includes('Berakhir')) statuses.push('Berakhir');
   stSel.innerHTML = '<option value="">Semua Status</option>' + statuses.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
   stSel.value = curSt;
 }
@@ -699,7 +700,7 @@ function renderMarketplace() {
   let list = state.auctions.filter((a) =>
     (!q || String(a.title || '').toLowerCase().includes(q)) &&
     (!cat || a.category_id === cat) &&
-    (!st || a.status === st));
+    (!st || (st === 'Berakhir' ? effectiveStatus(a) === 'Berakhir' : st === 'Live' ? isLive(a) : a.status === st)));
 
   list.sort((x, y) => {
     if (sort === 'highest') return currentPrice(y) - currentPrice(x);
@@ -1064,7 +1065,7 @@ function watchBadges(a) {
   let h = '';
   if (isLive(a)) h += '<span class="badge badge-live">Live</span> ';
   else if (st === 'scheduled') h += '<span class="badge badge-sched">Scheduled</span> ';
-  else if (ended) h += '<span class="badge badge-ended">Berakhir</span> ';
+  else if (ended || effectiveStatus(a) === 'Berakhir') h += '<span class="badge badge-ended">Berakhir</span> ';
   else h += `<span class="badge badge-watch">${esc(a.status || '')}</span> `;
   if (state.user && a.highest_bidder_id === state.user.id) h += '<span class="badge badge-win">&#127942; Winning</span>';
   else if (state.user && state.userBidAuctions.has(a.id)) h += '<span class="badge badge-outbid">Outbid</span>';
@@ -1256,7 +1257,7 @@ async function loadAdmin() {
 /* ---------- Admin: Live Control ---------- */
 async function renderAdminLive() {
   const panel = $('adminPanel'); if (!panel) return;
-  const live = state.auctions.filter((a) => ['live', 'paused'].includes(String(a.status).toLowerCase()));
+  const live = state.auctions.filter((a) => isLive(a) || (String(a.status).toLowerCase() === 'paused' && new Date(a.end_time) > new Date()));
   const totalBidValue = state.auctions.reduce((s, a) => s + Number(a.current_highest_bid || 0), 0);
   const endingSoon = live.filter((a) => new Date(a.end_time) - Date.now() < 3600000 && new Date(a.end_time) > new Date()).length;
   // username penawar tertinggi
@@ -1265,7 +1266,7 @@ async function renderAdminLive() {
   if (hbIds.length) { const p = await supabase.from('profiles').select('id,username,full_name').in('id', hbIds); hbMap = new Map((p.data || []).map((x) => [x.id, x.username || x.full_name || 'Penawar'])); }
   const stats = `
     <div class="wallet-grid" style="margin:0 0 16px">
-      <div class="wallet-card"><span>Lelang Aktif (Live/Paused)</span><b>${live.length}</b></div>
+      <div class="wallet-card"><span>Lelang Aktif (belum berakhir)</span><b>${live.length}</b></div>
       <div class="wallet-card"><span>Total Bid</span><b>${state.totalBids || 0}</b></div>
       <div class="wallet-card"><span>Total Nilai Bid Tertinggi</span><b>${rp(totalBidValue)}</b></div>
       <div class="wallet-card"><span>Berakhir &lt; 1 Jam</span><b>${endingSoon}</b></div>
@@ -1273,7 +1274,7 @@ async function renderAdminLive() {
   const rows = live.length ? live.map((a) => `
     <tr class="clickable" data-admin-row="${esc(a.id)}">
       <td>${primaryImage(a) ? `<img src="${esc(primaryImage(a))}" style="width:52px;height:40px;object-fit:cover;border-radius:8px" onerror="this.style.display='none'">` : ''}</td>
-      <td><b>${esc(a.title)}</b><br><span class="badge ${isLive(a) ? 'badge-live' : 'badge-sched'}">${esc(a.status)}</span></td>
+      <td><b>${esc(a.title)}</b><br><span class="badge ${isLive(a) ? 'badge-live' : 'badge-sched'}">${esc(effectiveStatus(a))}</span></td>
       <td>${rp(currentPrice(a))}<br><span style="color:var(--muted);font-size:13px">${a.highest_bidder_id ? esc(hbMap.get(a.highest_bidder_id) || 'Penawar') : 'Belum ada bid'}</span></td>
       <td>${state.bidCounts.get(a.id) || 0}</td>
       <td><span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></td>
@@ -2007,7 +2008,7 @@ async function loadSeller() {
 
   const unreadMails = (state.notifications || []).filter((n) => !n.is_read && n.type !== 'bid_placed').length;
   const tabs = [
-    ['monitor', `📡 Live Monitoring Jualan (${list.length} Barang)`],
+    ['monitor', `📡 Live Monitoring Jualan (${liveCount} Live dari ${list.length} Barang)`],
     ['mail', unreadMails > 0 ? `📬 Kotak Masuk Surat (${unreadMails})` : '📬 Kotak Masuk Surat'],
     ['wallet', '💰 Omset & Dompet Seller']
   ];
@@ -2017,7 +2018,7 @@ async function loadSeller() {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div>
           <h2 style="margin:0;font-size:22px;color:#F8FAFC">Dashboard Seller (Pemantau & Pemilik Barang)</h2>
-          <p style="margin:4px 0 0;font-size:13.5px;color:#94A3B8">Sebagai Seller, Anda bertindak sebagai pemantau lelang live untuk <b>${list.length} barang</b> milik Anda. Penawaran pembeli, persaingan detik sama, dan surat laporan hasil akhir lelang otomatis dikirim ke Kotak Masuk Anda.</p>
+          <p style="margin:4px 0 0;font-size:13.5px;color:#94A3B8">Sebagai Seller, Anda bertindak sebagai pemantau lelang live untuk <b>${liveCount} barang yang masih bisa ditawar</b> dari ${list.length} barang milik Anda. Penawaran pembeli, persaingan detik sama, dan surat laporan hasil akhir lelang otomatis dikirim ke Kotak Masuk Anda.</p>
         </div>
         <div style="display:flex;gap:8px">
           <span class="badge" style="background:#0F172A;color:var(--gold);border:1px solid var(--gold);padding:8px 14px;font-size:12px">
@@ -2141,7 +2142,7 @@ function renderSellerMonitor(panel, list, hbMap) {
               </td>
               <td><span class="countdown" data-countdown="${esc(a.end_time)}">${fmtCountdown(a.end_time)}</span></td>
               <td>
-                <a class="btn btn-outline btn-sm" href="#/auction/${esc(a.slug)}" style="white-space:nowrap">Pantau Live &rarr;</a>
+                <a class="btn btn-outline btn-sm" href="#/auction/${esc(a.slug)}" style="white-space:nowrap">${isLive(a) ? 'Pantau Live &rarr;' : 'Lihat Hasil &rarr;'}</a>
               </td>
             </tr>`;
           }).join('')}
