@@ -7,8 +7,23 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 1. IZIN RLS ADMIN MEMBUAT LELANG KONSINYASI MILIK SELLER
+-- 0. PERBARUI CHECK CONSTRAINT WALLET TRANSACTIONS
 -- ------------------------------------------------------------
+ALTER TABLE public.wallet_transactions DROP CONSTRAINT IF EXISTS wallet_transactions_transaction_type_check;
+ALTER TABLE public.wallet_transactions ADD CONSTRAINT wallet_transactions_transaction_type_check CHECK (
+  transaction_type IN (
+    'Admin Balance Addition',
+    'Admin Balance Deduction',
+    'Auction Bid Reservation',
+    'Bid Reservation Hold',
+    'Bid Reservation Release',
+    'Auction Payment',
+    'Auction Sale Proceeds',
+    'Buy Now Payment',
+    'Refund',
+    'Wallet Adjustment'
+  )
+);
 DROP POLICY IF EXISTS auctions_insert_seller ON public.auctions;
 DROP POLICY IF EXISTS auctions_insert_seller_or_admin ON public.auctions;
 CREATE POLICY auctions_insert_seller_or_admin ON public.auctions
@@ -260,7 +275,7 @@ BEGIN
       reserved_balance = reserved_balance + p_amount 
   WHERE id = v_wallet.id;
 
-  PERFORM public._ledger(v_wallet, 'Bid Reservation Hold', p_amount,
+  PERFORM public._ledger(v_wallet, 'Auction Bid Reservation', -p_amount,
     v_wallet.available_balance, v_wallet.available_balance - p_amount,
     v_wallet.reserved_balance, v_wallet.reserved_balance + p_amount,
     p_auction_id, v_bid_id, NULL, 'Saldo dikunci untuk penawaran pada lelang: "' || v_auction.title || '"', v_user, NULL);
@@ -303,3 +318,4 @@ GRANT EXECUTE ON FUNCTION public.finalize_auction(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.become_seller() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.send_test_notification(text, text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
+
