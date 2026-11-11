@@ -495,7 +495,19 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const rp = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n || 0));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const isLive = (a) => String(a.status || '').toLowerCase() === 'live';
+// "Live" berarti benar-benar masih bisa ditawar: status Live, sudah dimulai, dan belum lewat waktu selesai.
+const isLive = (a) => String(a.status || '').toLowerCase() === 'live'
+  && new Date(a.start_time) <= new Date()
+  && new Date(a.end_time) > new Date();
+// Label status efektif untuk tampilan: lelang berstatus Live yang waktunya sudah habis tampil sebagai "Berakhir".
+function effectiveStatus(a) {
+  const s = String(a.status || 'Live');
+  if (s.toLowerCase() === 'live') {
+    if (new Date(a.end_time) <= new Date()) return 'Berakhir';
+    if (new Date(a.start_time) > new Date()) return 'Scheduled';
+  }
+  return s;
+}
 const currentPrice = (a) => Number(a.current_highest_bid || 0) > 0 ? Number(a.current_highest_bid) : Number(a.starting_price || 0);
 const nextMinBid = (a) => Number(a.current_highest_bid || 0) > 0
   ? Number(a.current_highest_bid) + Number(a.minimum_increment || 0)
@@ -538,7 +550,7 @@ function tickCountdowns() {
 setInterval(tickCountdowns, 1000);
 
 function statusPill(a) {
-  const s = String(a.status || 'Live');
+  const s = effectiveStatus(a);
   const key = s.toLowerCase().replace(/\s+/g, '-');
   const known = ['live', 'scheduled', 'ended', 'completed', 'cancelled', 'paused', 'draft'];
   const cls = known.includes(key) ? 'pill-' + key : 'pill-default';
@@ -824,7 +836,7 @@ function renderDetail() {
     </div>` : '';
 
   const bidPanelBody = !isLive(a) ? `
-      <div class="login-cta">Lelang ini berstatus <b>${esc(a.status)}</b> dan tidak menerima bid saat ini.</div>`
+      <div class="login-cta">Lelang ini berstatus <b>${esc(effectiveStatus(a))}</b> dan tidak menerima bid saat ini.</div>`
     : !state.user ? `
       <div class="login-cta">Anda harus masuk untuk memasang bid.<br><br>
         <button class="btn btn-gold" type="button" id="bidLoginBtn">Masuk / Daftar</button></div>`
@@ -1071,7 +1083,7 @@ function renderWatchlist() {
   let list = state.auctions.filter((a) => state.watchlistIds.has(a.id));
   const total = list.length;
   if (state.watchFilter === 'live') list = list.filter(isLive);
-  if (state.watchFilter === 'ended') list = list.filter((a) => ['completed', 'ended', 'cancelled', 'no winner'].includes(String(a.status || '').toLowerCase()));
+  if (state.watchFilter === 'ended') list = list.filter((a) => ['completed', 'ended', 'cancelled', 'no winner'].includes(String(a.status || '').toLowerCase()) || effectiveStatus(a) === 'Berakhir');
   list = [...list].sort((x, y) => new Date(x.end_time) - new Date(y.end_time));
   const tabs = [['semua', 'Semua'], ['live', 'Live'], ['ended', 'Berakhir']]
     .map(([k, l]) => `<button type="button" class="${state.watchFilter === k ? 'active' : ''}" data-wfilter="${k}">${l}</button>`).join('');
