@@ -1460,11 +1460,14 @@ async function renderAdminCreate() {
 
   let sellers = [];
   const { data: profs } = await supabase.from('profiles').select('id,username,full_name,email,role').order('username');
-  if (profs && profs.length) sellers = profs;
-  const defaultSellerId = sellers.find((s) => s.email === 'seller@lelangku.app' || s.role === 'seller')?.id || state.user?.id;
+  if (profs && profs.length) {
+    const onlySellers = profs.filter((s) => s.role === 'seller');
+    sellers = onlySellers.length ? onlySellers : profs;
+  }
+  const defaultSellerId = sellers.find((s) => s.email === 'seller@lelangku.app' || s.role === 'seller')?.id || sellers[0]?.id || state.user?.id;
   const sellerOpts = sellers.map((s) => `
     <option value="${esc(s.id)}" ${s.id === defaultSellerId ? 'selected' : ''}>
-      ${esc(s.full_name || s.username || 'Seller')} (@${esc(s.username || 'user')}) &middot; ${esc(s.email || '')} [${esc(s.role || 'user')}]
+      🏪 ${esc(s.full_name || s.username || 'Seller Resmi')} (@${esc(s.username || 'seller')}) &middot; ${esc(s.email || '')}
     </option>
   `).join('');
 
