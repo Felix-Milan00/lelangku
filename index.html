@@ -1624,10 +1624,41 @@ async function renderAdminCreate() {
       extension_threshold_seconds: Number($('cfThreshold').value) || 30,
       extension_duration_seconds: Number($('cfExtDur').value) || 120,
     };
-    const { data, error } = await supabase.from('auctions').insert(payload).select('id').single();
-    if (error) { show(false, 'Gagal membuat lelang: ' + error.message); return; }
-    if ($('cfImage').value.trim()) {
-      await supabase.from('auction_images').insert({ auction_id: data.id, image_url: $('cfImage').value.trim(), is_primary: true, sort_order: 0 });
+    let createdId = null;
+    const imgUrl = $('cfImage').value.trim() || null;
+    // 1. Coba lewat RPC admin_create_auction (SECURITY DEFINER, bebas hambatan RLS)
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_create_auction', {
+      p_seller_id: targetSellerId,
+      p_category_id: payload.category_id,
+      p_title: payload.title,
+      p_slug: payload.slug,
+      p_description: payload.description,
+      p_condition: payload.condition,
+      p_location: payload.location,
+      p_starting_price: payload.starting_price,
+      p_minimum_increment: payload.minimum_increment,
+      p_reserve_price: payload.reserve_price,
+      p_buy_now_price: payload.buy_now_price,
+      p_start_time: payload.start_time,
+      p_end_time: payload.end_time,
+      p_status: payload.status,
+      p_is_featured: payload.is_featured,
+      p_anti_sniping_enabled: payload.anti_sniping_enabled,
+      p_extension_threshold_seconds: payload.extension_threshold_seconds,
+      p_extension_duration_seconds: payload.extension_duration_seconds,
+      p_image_url: imgUrl
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.success) {
+      createdId = rpcRes.id;
+    } else {
+      // Fallback insert standar
+      const { data, error } = await supabase.from('auctions').insert(payload).select('id').single();
+      if (error) { show(false, 'Gagal membuat lelang: ' + error.message); return; }
+      createdId = data.id;
+      if (imgUrl) {
+        await supabase.from('auction_images').insert({ auction_id: createdId, image_url: imgUrl, is_primary: true, sort_order: 0 });
+      }
     }
     show(true, 'Lelang berhasil dibuat dengan status ' + status + '.');
     toast('Lelang berhasil dibuat');
