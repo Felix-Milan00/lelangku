@@ -24,6 +24,10 @@ ALTER TABLE public.wallet_transactions ADD CONSTRAINT wallet_transactions_transa
     'Wallet Adjustment'
   )
 );
+
+-- ------------------------------------------------------------
+-- 1. IZIN RLS ADMIN MEMBUAT LELANG KONSINYASI MILIK SELLER
+-- ------------------------------------------------------------
 DROP POLICY IF EXISTS auctions_insert_seller ON public.auctions;
 DROP POLICY IF EXISTS auctions_insert_seller_or_admin ON public.auctions;
 CREATE POLICY auctions_insert_seller_or_admin ON public.auctions
