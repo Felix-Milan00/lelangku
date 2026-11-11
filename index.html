@@ -1887,8 +1887,7 @@ async function loadSeller() {
   const tabs = [
     ['monitor', `📡 Live Monitoring Jualan (${list.length} Barang)`],
     ['mail', unreadMails > 0 ? `📬 Kotak Masuk Surat (${unreadMails})` : '📬 Kotak Masuk Surat'],
-    ['wallet', '💰 Omset & Dompet Seller'],
-    ['create', '🤝 Titip Lelang (Konsinyasi)']
+    ['wallet', '💰 Omset & Dompet Seller']
   ];
 
   box.innerHTML = `
@@ -1954,8 +1953,6 @@ async function loadSeller() {
 
   if (state.sellerTab === 'monitor') {
     renderSellerMonitor(panel, list, hbMap);
-  } else if (state.sellerTab === 'create') {
-    renderSellerCreate(panel);
   } else if (state.sellerTab === 'wallet') {
     renderSellerWallet(panel, totalRevenue);
   } else if (state.sellerTab === 'mail') {
@@ -1966,6 +1963,9 @@ async function loadSeller() {
       supabase.from('notifications').update({ is_read: true }).eq('user_id', state.user.id).then();
     }
     renderSellerMail(panel);
+  } else {
+    state.sellerTab = 'monitor';
+    renderSellerMonitor(panel, list, hbMap);
   }
 }
 
@@ -1973,8 +1973,7 @@ function renderSellerMonitor(panel, list, hbMap) {
   if (!list.length) {
     panel.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
       <h3>Belum Ada Barang yang Dilelang</h3>
-      <p style="color:var(--muted);margin-bottom:16px">Mulai pasang barang lelang pertama Anda sekarang juga.</p>
-      <button class="btn btn-gold" onclick="state.sellerTab='create';loadSeller();">Pasang Barang Baru &rarr;</button>
+      <p style="color:var(--muted);margin-bottom:0">Barang Anda akan ditampilkan di sini setelah dikurasi dan diterbitkan oleh Admin via sistem konsinyasi.</p>
     </div>`;
     return;
   }
@@ -2029,103 +2028,6 @@ function renderSellerMonitor(panel, list, hbMap) {
     </div>
   `;
   tickCountdowns();
-}
-
-function renderSellerCreate(panel) {
-  panel.innerHTML = `
-    <div class="card" style="padding:28px;border-radius:14px;border:1px solid #E2E8F0">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <span style="font-size:32px">🤝</span>
-        <div>
-          <h3 style="margin:0;font-size:20px;color:var(--navy)">Prosedur Konsinyasi & Penerbitan Lelang Resmi</h3>
-          <p style="margin:4px 0 0;font-size:14px;color:var(--muted)">Seluruh barang lelang dikurasi dan diterbitkan secara resmi oleh <b>Admin Platform</b> untuk menjamin legalitas barang dan keamanan transaksi pasar terdistribusi.</p>
-        </div>
-      </div>
-
-      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:20px;margin-bottom:24px">
-        <h4 style="margin:0 0 14px;font-size:15px;color:var(--navy)">🔄 4 Tahap Alur Konsinyasi (Seller ⇄ Admin):</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;font-size:13.5px">
-          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:var(--gold-dark);display:block;margin-bottom:6px">1. Koordinasi Messenger 💬</b>
-            Seller menghubungi Admin via WhatsApp atau Telegram untuk mengirim foto barang, spesifikasi, dan usulan harga.
-          </div>
-          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:#2563EB;display:block;margin-bottom:6px">2. Verifikasi & Kurasi ⚖️</b>
-            Admin memeriksa keaslian barang serta menyepakati Starting Price, Reserve Price, dan jadwal tayang lelang.
-          </div>
-          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:#7C3AED;display:block;margin-bottom:6px">3. Diterbitkan oleh Admin 🏷️</b>
-            Admin membuka <b>Panel Admin &rarr; Buat Lelang</b>, memilih akun Seller Anda, dan menerbitkan lelang ke publik.
-          </div>
-          <div style="background:#fff;padding:16px;border-radius:10px;border:1px solid #E2E8F0">
-            <b style="color:#059669;display:block;margin-bottom:6px">4. Masuk Akun & Dompet 💰</b>
-            Lelang otomatis aktif di <b>Live Monitoring Jualan</b> Anda. Hasil penjualan lelang langsung 100% cair ke Dompet Anda!
-          </div>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <a class="btn btn-gold" href="https://wa.me/?text=Halo%20Admin%20LelangKu,%20saya%20ingin%20mengajukan%20konsinyasi%20barang%20lelang%20baru" target="_blank" rel="noopener">
-          💬 Hubungi Admin via WhatsApp
-        </a>
-        ${state.isAdmin ? `
-        <a class="btn btn-navy" href="#/admin" onclick="state.adminTab='create';">
-          ⚙️ Buka Form Buat Lelang Admin (Konsinyasi) &rarr;
-        </a>` : ''}
-        <button class="btn btn-light" type="button" id="btnToggleDraftForm">
-          📝 Tulis Draf Pengajuan Barang
-        </button>
-      </div>
-
-      <div id="draftFormArea" style="display:none;margin-top:24px;border-top:1px dashed var(--line);padding-top:20px">
-        <h4 style="margin:0 0 10px;font-size:15px">Formulir Pengajuan Titip Lelang ke Admin</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Isi ringkasan ini untuk disalin dan dikirimkan ke Admin via messenger:</p>
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1">
-            <label>Nama / Judul Barang</label>
-            <input id="propTitle" placeholder="mis. iPhone 15 Pro Max 256GB">
-          </div>
-          <div class="field">
-            <label>Usulan Harga Mulai (Rp)</label>
-            <input id="propStart" type="number" placeholder="mis. 12000000">
-          </div>
-          <div class="field">
-            <label>Usulan Reserve Price (Rp)</label>
-            <input id="propReserve" type="number" placeholder="mis. 15000000">
-          </div>
-          <div class="field" style="grid-column:1/-1">
-            <label>Keterangan & Kondisi Barang</label>
-            <textarea id="propDesc" rows="3" placeholder="Kelengkapan unit, minus jika ada, garansi…"></textarea>
-          </div>
-        </div>
-        <button class="btn btn-navy btn-sm" type="button" id="btnCopyProposal" style="margin-top:10px">
-          📋 Salin Format Pesan untuk WhatsApp/Telegram Admin
-        </button>
-      </div>
-    </div>
-  `;
-
-  const btnToggle = $('btnToggleDraftForm');
-  if (btnToggle) {
-    btnToggle.addEventListener('click', () => {
-      const area = $('draftFormArea');
-      if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
-    });
-  }
-
-  const btnCopy = $('btnCopyProposal');
-  if (btnCopy) {
-    btnCopy.addEventListener('click', () => {
-      const t = $('propTitle').value.trim() || 'Barang Lelang';
-      const s = $('propStart').value ? rp(Number($('propStart').value)) : 'Rp0';
-      const r = $('propReserve').value ? rp(Number($('propReserve').value)) : 'Tidak ada';
-      const d = $('propDesc').value.trim() || '-';
-      const text = `Halo Admin LelangKu, saya ingin mengajukan konsinyasi lelang:\n• Barang: ${t}\n• Usulan Mulai: ${s}\n• Target Minimum (Reserve): ${r}\n• Kondisi: ${d}\n• ID Akun Seller Saya: ${state.user?.id || 'seller'}`;
-      navigator.clipboard.writeText(text).then(() => {
-        toast('Format pesan berhasil disalin! Silakan paste ke WhatsApp/Telegram Admin.');
-      });
-    });
-  }
 }
 
 function renderSellerWallet(panel, totalRevenue) {
