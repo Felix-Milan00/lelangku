@@ -1376,7 +1376,7 @@ async function adminAuctionAction(a, kind) {
 async function renderAdminWallets() {
   const panel = $('adminPanel'); if (!panel) return;
   panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
-  const { data: wallets, error } = await supabase.from('wallets').select('*,profiles(username,full_name,email)').order('updated_at', { ascending: false });
+  const { data: wallets, error } = await supabase.from('wallets').select('*,profiles(username,full_name)').order('updated_at', { ascending: false });
   if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat wallet</b>${esc(error.message)}</div>`; return; }
   state.adminWallets = wallets || [];
   const { data: gtx } = await supabase.from('wallet_transactions').select('*,profiles(username,full_name)').order('created_at', { ascending: false }).limit(20);
@@ -1389,7 +1389,7 @@ function drawAdminWallets() {
   const totalAvail = wallets.reduce((s, w) => s + Number(w.available_balance || 0), 0);
   const totalResv = wallets.reduce((s, w) => s + Number(w.reserved_balance || 0), 0);
   const q = (panel.querySelector('#adminWalletSearch')?.value || '').toLowerCase();
-  const list = wallets.filter((w) => !q || `${w.profiles?.full_name || ''} ${w.profiles?.username || ''} ${w.profiles?.email || ''}`.toLowerCase().includes(q));
+  const list = wallets.filter((w) => !q || `${w.profiles?.full_name || ''} ${w.profiles?.username || ''}`.toLowerCase().includes(q));
   const lastTx = new Map();
   state.adminGlobalTxs.forEach((t) => { if (!lastTx.has(t.wallet_id)) lastTx.set(t.wallet_id, t); });
   panel.innerHTML = `
@@ -1399,11 +1399,11 @@ function drawAdminWallets() {
       <p style="color:var(--muted)">Tersedia ${rp(totalAvail)} &middot; Tertahan ${rp(totalResv)} &middot; ${wallets.length} wallet</p>
     </div>
     <div style="display:flex;gap:10px;margin:18px 0;flex-wrap:wrap;align-items:center">
-      <input type="search" id="adminWalletSearch" placeholder="Cari nama / username / email…" value="${esc(q)}" style="padding:11px 14px;border:1px solid var(--line);border-radius:10px;min-width:260px;flex:1">
+      <input type="search" id="adminWalletSearch" placeholder="Cari nama / username…" value="${esc(q)}" style="padding:11px 14px;border:1px solid var(--line);border-radius:10px;min-width:260px;flex:1">
     </div>
     <div class="tbl-wrap"><table class="data"><thead><tr><th>Pengguna</th><th>Tersedia</th><th>Tertahan</th><th>Total</th><th>Status</th><th>Transaksi Terakhir</th><th>Aksi</th></tr></thead>
     <tbody>${list.length ? list.map((w) => { const lt = lastTx.get(w.id); return `<tr>
-      <td><b>${esc(w.profiles?.full_name || w.profiles?.username || 'Pengguna')}</b><br><span style="color:var(--muted);font-size:13px">@${esc(w.profiles?.username || '-')} &middot; ${esc(w.profiles?.email || '')}</span></td>
+      <td><b>${esc(w.profiles?.full_name || w.profiles?.username || 'Pengguna')}</b><br><span style="color:var(--muted);font-size:13px">@${esc(w.profiles?.username || '-')}</span></td>
       <td>${rp(w.available_balance)}</td><td>${rp(w.reserved_balance)}</td><td><b>${rp(Number(w.available_balance) + Number(w.reserved_balance))}</b></td>
       <td><span class="badge badge-watch">${esc(w.status || 'active')}</span></td>
       <td style="font-size:13px;color:var(--muted)">${lt ? esc(lt.description || txTypeLabel(lt)) + ' &middot; ' + new Date(lt.created_at).toLocaleDateString('id-ID') : 'Belum ada'}</td>
@@ -1467,7 +1467,7 @@ async function renderAdminCreate() {
   const defaultSellerId = sellers.find((s) => s.email === 'seller@lelangku.app' || s.role === 'seller')?.id || sellers[0]?.id || state.user?.id;
   const sellerOpts = sellers.map((s) => `
     <option value="${esc(s.id)}" ${s.id === defaultSellerId ? 'selected' : ''}>
-      🏪 ${esc(s.full_name || s.username || 'Seller Resmi')} (@${esc(s.username || 'seller')}) &middot; ${esc(s.email || '')}
+      🏪 ${esc(s.full_name || s.username || 'Seller Resmi')} (@${esc(s.username || 'seller')})
     </option>
   `).join('');
 
@@ -1558,7 +1558,7 @@ async function renderAdminCreate() {
   const updateSummary = () => {
     const { start, end } = computeTimes();
     const selSeller = sellers.find((s) => s.id === $('cfSeller')?.value);
-    const sellerLabel = selSeller ? (selSeller.full_name || selSeller.username || selSeller.email) : 'Seller Terpilih';
+    const sellerLabel = selSeller ? (selSeller.full_name || selSeller.username || 'Seller Terpilih') : 'Seller Terpilih';
     $('cfEndPreview').textContent = fmtJakarta(end);
     $('cfSummary').innerHTML = `
       <div>Pemilik (Seller): <b>${esc(sellerLabel)}</b></div>
