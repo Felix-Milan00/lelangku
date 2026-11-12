@@ -83,6 +83,7 @@ section.block{padding:44px 0 8px}
 .pill-live{background:var(--green);color:#fff}
 .pill-scheduled{background:var(--gold);color:#1A1A1A}
 .pill-ended,.pill-completed,.pill-cancelled,.pill-paused{background:var(--red);color:#fff}
+.pill-terjual{background:#B45309;color:#fff}
 .pill-draft,.pill-default{background:#475467;color:#fff}
 .card-body{padding:16px;display:flex;flex-direction:column;gap:7px;flex:1}
 .card-cat{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gold-dark)}
@@ -250,6 +251,8 @@ footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(255
     <button class="hamburger" id="hamburger" aria-label="Menu">&#9776;</button>
     <nav class="nav-links" id="navLinks">
       <a href="#/" data-nav="marketplace">Marketplace</a>
+      <a href="#/preauction" data-nav="preauction">&#128197; Lelang Mendatang</a>
+      <a href="#/orders" data-nav="orders" id="navOrders" class="hidden">&#129534; Transaksi</a>
       <a href="#/watchlist" data-nav="watchlist">&#9733; Watchlist</a>
       <a href="#/wallet" data-nav="wallet" id="navWallet" class="hidden">Wallet</a>
       <a href="#/seller" data-nav="seller" id="navSeller" class="hidden">🏪 Seller Hub<span id="navSellerBadge"></span></a>
@@ -380,6 +383,20 @@ footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(255
   </main>
 </div>
 
+<div id="preauctionView" class="hidden">
+  <main class="wrap">
+    <div class="page-head"><h1>&#128197; Lelang Mendatang (Pre-Auction)</h1><p>Barang-barang yang sudah disetujui admin &amp; seller dan terjadwal untuk dilelang. Persiapkan diri Anda sebelum penawaran dibuka.</p></div>
+    <div id="preauctionContent" style="padding-bottom:48px"></div>
+  </main>
+</div>
+
+<div id="ordersView" class="hidden">
+  <main class="wrap">
+    <div class="page-head"><h1>&#129534; Transaksi Saya</h1><p>Kelola pembayaran lelang yang Anda menangkan, isi alamat pengiriman, dan pantau pengiriman barang Anda.</p></div>
+    <div id="ordersContent" style="padding-bottom:48px"></div>
+  </main>
+</div>
+
 <footer class="site">
   <div class="wrap">
     <div class="cols">
@@ -475,6 +492,10 @@ const state = {
   notifications: [],
   unreadNotifs: 0,
   sellerAuctions: [],
+  settings: {},            // platform_settings (biaya admin, instruksi pembayaran, tenggat)
+  myDeposit: null,         // baris user_deposits user login
+  myOrders: [],            // transaksi pembelian user login
+  editingSubmissionId: null,
   adminTab: 'live',
   adminAuctionId: null,
   adminWallets: [],
@@ -506,6 +527,7 @@ function effectiveStatus(a) {
     if (new Date(a.end_time) <= new Date()) return 'Berakhir';
     if (new Date(a.start_time) > new Date()) return 'Scheduled';
   }
+  if (s === 'Completed') return a.highest_bidder_id ? 'Terjual' : 'Berakhir';
   return s;
 }
 const currentPrice = (a) => Number(a.current_highest_bid || 0) > 0 ? Number(a.current_highest_bid) : Number(a.starting_price || 0);
@@ -552,7 +574,7 @@ setInterval(tickCountdowns, 1000);
 function statusPill(a) {
   const s = effectiveStatus(a);
   const key = s.toLowerCase().replace(/\s+/g, '-');
-  const known = ['live', 'scheduled', 'ended', 'completed', 'cancelled', 'paused', 'draft'];
+  const known = ['live', 'scheduled', 'ended', 'completed', 'cancelled', 'paused', 'draft', 'terjual'];
   const cls = known.includes(key) ? 'pill-' + key : 'pill-default';
   return `<span class="pill ${cls}">${esc(s)}</span>`;
 }
@@ -602,10 +624,14 @@ async function loadData(showSkeleton = false) {
     skeletons(4, $('featuredGrid')); skeletons(4, $('liveGrid'));
     skeletons(4, $('endingGrid')); skeletons(8, $('marketGrid'));
   }
+  // Pemeliharaan otomatis: promosikan lelang terjadwal yang waktunya tiba &
+  // tandai pembayaran yang melewati tenggat (idempotent, aman dipanggil siapa pun)
+  try { await supabase.rpc('promote_due_auctions'); } catch (e) { /* abaikan */ }
+  try { await supabase.rpc('check_expired_payments'); } catch (e) { /* abaikan */ }
   const [catRes, aucRes, bidRes] = await Promise.all([
     supabase.from('categories').select('id,name,slug,description').order('name'),
     supabase.from('auctions')
-      .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,location,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,is_featured,anti_sniping_enabled,extension_threshold_seconds,extension_duration_seconds,categories(name,slug),auction_images(image_url,is_primary,sort_order)')
+      .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,location,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,is_featured,anti_sniping_enabled,extension_threshold_seconds,extension_duration_seconds,min_deposit,categories(name,slug),auction_images(image_url,is_primary,sort_order)')
       .order('end_time', { ascending: true }),
     supabase.from('bids').select('id,auction_id,amount'),
   ]);
@@ -728,7 +754,7 @@ async function loadDetail(slug) {
 
   const { data: a, error } = await supabase
     .from('auctions')
-    .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,location,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,is_featured,anti_sniping_enabled,extension_threshold_seconds,extension_duration_seconds,categories(name,slug),auction_images(image_url,is_primary,sort_order)')
+    .select('id,seller_id,category_id,title,slug,description,condition,starting_price,current_highest_bid,minimum_increment,reserve_price,buy_now_price,location,highest_bidder_id,start_time,end_time,actual_end_time,completed_at,status,is_featured,anti_sniping_enabled,extension_threshold_seconds,extension_duration_seconds,min_deposit,categories(name,slug),auction_images(image_url,is_primary,sort_order)')
     .eq('slug', slug).single();
 
   if (error || !a) {
@@ -852,6 +878,7 @@ function renderDetail() {
         ${highestAmount > 0 ? `<button class="chip" type="button" id="chipTieTest" style="background:#FEF08A;color:#854D0E;border:1px solid #EAB308;font-weight:600" title="Uji Race Condition: Pasang tawaran nominal yang sama persis dengan pemimpin">⚡ Uji Nominal Sama (${rp(highestAmount)})</button>` : ''}
       </div>
       <button class="btn btn-gold btn-block" type="button" id="placeBidBtn" style="margin-top:14px">Pasang Bid</button>
+      ${Number(a.min_deposit || 0) > 0 ? `<div style="margin-top:14px;padding:12px;background:#FFFBEB;border:1.5px dashed var(--gold);border-radius:12px;font-size:13.5px">🛡️ <b>Lelang berdeposit:</b> untuk ikut menawar lelang ini Anda wajib melengkapi <b>data penjamin</b> dan memiliki <b>deposit terverifikasi minimal ${rp(a.min_deposit)}</b>. Lengkapi di halaman Wallet.</div>` : ''}
       ${buyNowBox}
       <div class="bid-msg" id="bidMsg"></div>`;
 
@@ -941,7 +968,7 @@ async function placeBid() {
   const show = (ok, text) => { msg.className = 'bid-msg ' + (ok ? 'ok' : 'err'); msg.textContent = text; };
   if (!amount || amount <= 0) { show(false, 'Masukkan jumlah bid yang valid.'); return; }
   btn.disabled = true; btn.textContent = 'Memproses…';
-  const { data, error } = await supabase.rpc('place_bid_with_wallet', { p_auction_id: a.id, p_amount: amount });
+  const { data, error } = await supabase.rpc('place_bid_with_wallet_v2', { p_auction_id: a.id, p_amount: amount });
   btn.disabled = false; btn.textContent = 'Pasang Bid';
   if (error) { show(false, 'Bid ditolak: ' + error.message); return; }
   const raw = typeof data === 'string' ? data : JSON.stringify(data);
@@ -1084,7 +1111,7 @@ function renderWatchlist() {
   let list = state.auctions.filter((a) => state.watchlistIds.has(a.id));
   const total = list.length;
   if (state.watchFilter === 'live') list = list.filter(isLive);
-  if (state.watchFilter === 'ended') list = list.filter((a) => ['completed', 'ended', 'cancelled', 'no winner'].includes(String(a.status || '').toLowerCase()) || effectiveStatus(a) === 'Berakhir');
+  if (state.watchFilter === 'ended') list = list.filter((a) => ['completed', 'ended', 'cancelled', 'no winner'].includes(String(a.status || '').toLowerCase()) || ['Berakhir', 'Terjual'].includes(effectiveStatus(a)));
   list = [...list].sort((x, y) => new Date(x.end_time) - new Date(y.end_time));
   const tabs = [['semua', 'Semua'], ['live', 'Live'], ['ended', 'Berakhir']]
     .map(([k, l]) => `<button type="button" class="${state.watchFilter === k ? 'active' : ''}" data-wfilter="${k}">${l}</button>`).join('');
@@ -1242,7 +1269,7 @@ function renderAdminGate() {
 
 async function loadAdmin() {
   const box = $('adminContent');
-  const tabs = [['live', 'Live Control'], ['wallets', 'Wallet Management'], ['create', 'Buat Lelang'], ['bids', 'Monitoring Bid']];
+  const tabs = [['live', 'Live Control'], ['wallets', 'Wallet Management'], ['create', 'Buat Lelang'], ['bids', 'Monitoring Bid'], ['sellerreq', 'Pengajuan Seller'], ['items', 'Pengajuan Barang'], ['orders', 'Transaksi & Kirim'], ['deposits', 'Deposit']];
   box.innerHTML = `<div class="admin-layout">
     <div class="admin-side">${tabs.map(([k, l]) => `<button type="button" data-atab="${k}" class="${state.adminTab === k ? 'active' : ''}">${l}</button>`).join('')}</div>
     <div id="adminPanel"><div class="skel" style="aspect-ratio:16/6"></div></div>
@@ -1251,6 +1278,10 @@ async function loadAdmin() {
   if (state.adminTab === 'live') renderAdminLive();
   else if (state.adminTab === 'wallets') renderAdminWallets();
   else if (state.adminTab === 'create') renderAdminCreate();
+  else if (state.adminTab === 'sellerreq') renderAdminSellerReq();
+  else if (state.adminTab === 'items') renderAdminItems();
+  else if (state.adminTab === 'orders') renderAdminOrders();
+  else if (state.adminTab === 'deposits') renderAdminDeposits();
   else renderAdminBids();
 }
 
@@ -1542,6 +1573,7 @@ async function renderAdminCreate() {
             <div class="field"><label>Threshold (detik)</label><input id="cfThreshold" type="number" min="0" value="30"></div>
             <div class="field"><label>Durasi ekstensi (detik)</label><input id="cfExtDur" type="number" min="1" value="120"></div>
           </div>
+          <div class="field" style="margin-top:12px"><label>Deposit minimum peserta (Rp) — 0 berarti tanpa syarat deposit &amp; penjamin</label><input id="cfMinDeposit" type="number" min="0" value="0"></div>
         </div>
       </div>
       <div>
@@ -1672,6 +1704,10 @@ async function renderAdminCreate() {
       if (imgUrl) {
         await supabase.from('auction_images').insert({ auction_id: createdId, image_url: imgUrl, is_primary: true, sort_order: 0 });
       }
+    }
+    const minDep = Number($('cfMinDeposit')?.value || 0);
+    if (createdId && minDep > 0) {
+      await supabase.from('auctions').update({ min_deposit: minDep }).eq('id', createdId);
     }
     show(true, 'Lelang berhasil dibuat dengan status ' + status + '.');
     toast('Lelang berhasil dibuat');
@@ -1940,12 +1976,14 @@ function renderWallet() {
       <button class="btn btn-light btn-sm" id="txPrev" ${state.walletPage <= 1 ? 'disabled' : ''}>&larr; Sebelumnya</button>
       <span style="color:var(--muted);font-size:14px">Halaman ${state.walletPage} dari ${pages} (${list.length} transaksi)</span>
       <button class="btn btn-light btn-sm" id="txNext" ${state.walletPage >= pages ? 'disabled' : ''}>Berikutnya &rarr;</button>
-    </div>`;
+    </div>
+    <div id="depositSection" style="margin-top:30px"></div>`;
 
   box.querySelectorAll('[data-txfilter]').forEach((b) => b.addEventListener('click', () => { state.walletFilter = b.getAttribute('data-txfilter'); state.walletPage = 1; renderWallet(); }));
   $('walletSearch').addEventListener('input', (e) => { state.walletSearch = e.target.value; state.walletPage = 1; renderWallet(); $('walletSearch')?.focus(); });
   $('txPrev')?.addEventListener('click', () => { state.walletPage--; renderWallet(); });
   $('txNext')?.addEventListener('click', () => { state.walletPage++; renderWallet(); });
+  renderDepositSection();
 }
 
 function setupWalletRealtime() {
@@ -1978,6 +2016,8 @@ async function loadSeller() {
   const box = $('sellerContent');
   if (!box) return;
   box.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>';
+  // Pengguna biasa harus mengajukan permohonan seller & disetujui admin terlebih dahulu
+  if (state.profile?.role === 'user') { renderSellerApplication(box); return; }
 
   const { data: myAuctions, error } = await supabase
     .from('auctions')
@@ -2009,6 +2049,8 @@ async function loadSeller() {
   const unreadMails = (state.notifications || []).filter((n) => !n.is_read && n.type !== 'bid_placed').length;
   const tabs = [
     ['monitor', `📡 Live Monitoring Jualan (${liveCount} Live dari ${list.length} Barang)`],
+    ['ajukan', '📦 Pengajuan Barang'],
+    ['transaksi', '🧾 Penjualan & Biaya Admin'],
     ['mail', unreadMails > 0 ? `📬 Kotak Masuk Surat (${unreadMails})` : '📬 Kotak Masuk Surat'],
     ['wallet', '💰 Omset & Dompet Seller']
   ];
@@ -2076,6 +2118,10 @@ async function loadSeller() {
 
   if (state.sellerTab === 'monitor') {
     renderSellerMonitor(panel, list, hbMap);
+  } else if (state.sellerTab === 'ajukan') {
+    renderSellerSubmissions(panel);
+  } else if (state.sellerTab === 'transaksi') {
+    renderSellerTransactions(panel);
   } else if (state.sellerTab === 'wallet') {
     renderSellerWallet(panel, totalRevenue);
   } else if (state.sellerTab === 'mail') {
@@ -2448,7 +2494,7 @@ async function loadNotifications() {
 /* ================= Profil & peran ================= */
 async function loadProfile() {
   if (!state.user) { state.profile = null; state.isAdmin = false; state.isSeller = false; updateNavRole(); return; }
-  const { data } = await supabase.from('profiles').select('id,username,full_name,email,role').eq('id', state.user.id).maybeSingle();
+  const { data } = await supabase.from('profiles').select('id,username,full_name,email,role,account_status,banned_until,guarantor_name,guarantor_phone,guarantor_relation,guarantor_address,guarantor_id_number,guarantor_completed').eq('id', state.user.id).maybeSingle();
   state.profile = data || null;
   state.isAdmin = !!data && data.role === 'admin';
   state.isSeller = !!data && (data.role === 'seller' || data.role === 'admin');
@@ -2456,6 +2502,7 @@ async function loadProfile() {
 }
 function updateNavRole() {
   $('navWallet')?.classList.toggle('hidden', !state.user);
+  $('navOrders')?.classList.toggle('hidden', !state.user);
   $('navSeller')?.classList.toggle('hidden', !state.user);
   $('navAdmin')?.classList.toggle('hidden', !state.isAdmin);
   const badge = $('navSellerBadge');
@@ -2479,6 +2526,8 @@ function refreshBlockedNow() {
   if (!$('confirmModal').classList.contains('hidden')) return true;
   if (!$('authModal').classList.contains('hidden')) return true;
   if (currentView() === 'admin' && state.adminTab === 'create') return true;
+  if (currentView() === 'seller' && state.sellerTab === 'ajukan') return true;
+  if (currentView() === 'orders' && document.querySelector('.addr-form')) return true;
   return false;
 }
 function scheduleRefresh() {
@@ -2494,6 +2543,8 @@ function scheduleRefresh() {
     else if (view === 'watchlist') renderWatchlist();
     else if (view === 'wallet') renderWallet();
     else if (view === 'seller') renderSellerGate();
+    else if (view === 'preauction') renderPreauction();
+    else if (view === 'orders') renderOrders();
     else if (view === 'admin' && state.isAdmin) loadAdmin();
   }, 400);
 }
@@ -2508,6 +2559,11 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_admin_actions' }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlists' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'item_submissions' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'seller_applications' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'deposit_requests' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_deposits' }, scheduleRefresh)
     .subscribe((status) => { if (status === 'SUBSCRIBED') scheduleRefresh(); });
 }
 // Jaring pengaman sinkronisasi: sinkronkan ulang saat tab kembali aktif,
@@ -2532,9 +2588,11 @@ function currentView() {
   if (h.startsWith('#/wallet')) return 'wallet';
   if (h.startsWith('#/seller')) return 'seller';
   if (h.startsWith('#/admin')) return 'admin';
+  if (h.startsWith('#/preauction')) return 'preauction';
+  if (h.startsWith('#/orders')) return 'orders';
   return 'home';
 }
-const ALL_VIEWS = ['homeView', 'detailView', 'watchlistView', 'walletView', 'sellerView', 'adminView'];
+const ALL_VIEWS = ['homeView', 'detailView', 'watchlistView', 'walletView', 'sellerView', 'adminView', 'preauctionView', 'ordersView'];
 function showView(id) {
   ALL_VIEWS.forEach((v) => $(v).classList.toggle('hidden', v !== id));
 }
@@ -2546,6 +2604,8 @@ function route() {
   if (view === 'watchlist') { showView('watchlistView'); window.scrollTo({ top: 0 }); renderWatchlist(); }
   else if (view === 'wallet') { showView('walletView'); window.scrollTo({ top: 0 }); renderWallet(); if (state.user && !state.wallet) loadWallet(); }
   else if (view === 'seller') { showView('sellerView'); window.scrollTo({ top: 0 }); renderSellerGate(); }
+  else if (view === 'preauction') { showView('preauctionView'); window.scrollTo({ top: 0 }); renderPreauction(); }
+  else if (view === 'orders') { showView('ordersView'); window.scrollTo({ top: 0 }); renderOrders(); }
   else if (view === 'admin') { showView('adminView'); window.scrollTo({ top: 0 }); renderAdminGate(); }
   else {
     showView('homeView');
@@ -2606,6 +2666,756 @@ $('btnRegister').addEventListener('click', () => openAuth('register'));
   setupRealtime();
   route();
 })();
+
+/* ================= Fase 4: fitur dosen ================= */
+function p4dt(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+}
+function p4dur(mins) {
+  const m = Number(mins || 0);
+  if (!m) return '—';
+  if (m % 1440 === 0) return (m / 1440) + ' hari';
+  if (m % 60 === 0) return (m / 60) + ' jam';
+  return m + ' menit';
+}
+async function loadSettings() {
+  if (state.settings && state.settings._loaded) return state.settings;
+  const { data } = await supabase.from('platform_settings').select('setting_key,setting_value');
+  const s = { _loaded: true, feePercent: 0, payInstructions: '', deadlineHours: 24 };
+  (data || []).forEach((r) => {
+    if (r.setting_key === 'platform_fee_percent') s.feePercent = Number(r.setting_value || 0);
+    if (r.setting_key === 'payment_instructions') s.payInstructions = String(r.setting_value || '');
+    if (r.setting_key === 'payment_deadline_hours') s.deadlineHours = Number(r.setting_value || 24);
+  });
+  state.settings = s;
+  return s;
+}
+async function uploadToBucket(bucket, path, file) {
+  const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
+  if (error) throw error;
+  return path;
+}
+async function signedUrl(bucket, path, expires = 3600) {
+  if (!path) return '';
+  if (/^https?:\/\//.test(path)) return path;
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, expires);
+  return data?.signedUrl || '';
+}
+function payStatusPill(st) {
+  const map = { 'Awaiting Payment': '#D97706', 'Payment Submitted': '#2563EB', 'Under Review': '#2563EB', 'Paid': '#16A34A', 'Rejected': '#DC2626', 'Expired': '#DC2626', 'Cancelled': '#64748B', 'Completed': '#0F766E' };
+  return `<span class="badge" style="background:${map[st] || '#64748B'};color:#fff">${esc(st)}</span>`;
+}
+
+/* ---------- Halaman Pre-Auction (Lelang Mendatang) ---------- */
+function renderPreauction() {
+  const box = $('preauctionContent'); if (!box) return;
+  const list = state.auctions
+    .filter((a) => String(a.status) === 'Scheduled')
+    .sort((x, y) => new Date(x.start_time) - new Date(y.start_time));
+  if (!list.length) {
+    box.innerHTML = '<div class="state-box"><b>Belum ada lelang terjadwal</b>Barang yang sudah disetujui admin &amp; seller akan tampil di sini sebelum lelangnya dimulai.</div>';
+    return;
+  }
+  box.innerHTML = `<div class="grid">${list.map((a) => {
+    const img = primaryImage(a);
+    const durMin = Math.round((new Date(a.end_time) - new Date(a.start_time)) / 60000);
+    return `<article class="card">
+      <div class="card-img">
+        <div class="ph">${esc(a.title)}</div>
+        ${img ? `<img src="${esc(img)}" alt="${esc(a.title)}" loading="lazy" onerror="this.classList.add('hidden')">` : ''}
+        <span class="pill pill-scheduled">Terjadwal</span>
+        <button type="button" class="star-btn ${state.watchlistIds.has(a.id) ? 'on' : ''}" data-star="${esc(a.id)}" title="Toggle watchlist">${state.watchlistIds.has(a.id) ? '&#9733;' : '&#9734;'}</button>
+      </div>
+      <div class="card-body">
+        <div class="card-cat">${esc(a.categories?.name || 'Tanpa Kategori')}</div>
+        <div class="card-title">${esc(a.title)}</div>
+        <p style="font-size:13.5px;color:var(--muted);margin:4px 0">${esc((a.description || '').slice(0, 110))}${(a.description || '').length > 110 ? '…' : ''}</p>
+        <div class="card-row"><span>Harga awal</span><b>${rp(a.starting_price)}</b></div>
+        <div class="card-row"><span>Tanggal lelang</span><b>${new Date(a.start_time).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</b></div>
+        <div class="card-row"><span>Jam mulai</span><b>${new Date(a.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</b></div>
+        <div class="card-row"><span>Durasi</span><b>${p4dur(durMin)}</b></div>
+        ${Number(a.min_deposit || 0) > 0 ? `<div class="card-row"><span>Deposit minimum</span><b style="color:var(--gold-dark)">${rp(a.min_deposit)}</b></div>` : ''}
+        <div class="card-row"><span>Mulai dalam</span><span class="countdown" data-countdown="${esc(a.start_time)}">${fmtCountdown(a.start_time)}</span></div>
+        <a class="btn btn-navy btn-block" href="#/auction/${esc(a.slug)}">Lihat Detail</a>
+      </div>
+    </article>`;
+  }).join('')}</div>`;
+  box.querySelectorAll('[data-star]').forEach((b) => b.addEventListener('click', () => toggleWatchlistById(b.getAttribute('data-star'))));
+  tickCountdowns();
+}
+
+/* ---------- Halaman Transaksi (pembeli) ---------- */
+async function renderOrders() {
+  const box = $('ordersContent'); if (!box) return;
+  if (!state.user) {
+    box.innerHTML = `<div class="state-box"><b>Masuk untuk melihat transaksi Anda</b>Transaksi lelang yang Anda menangkan tampil di sini.<br><br>
+      <button class="btn btn-gold" type="button" onclick="document.getElementById('btnLogin')?.click()">Masuk / Daftar</button></div>`;
+    return;
+  }
+  box.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>';
+  const settings = await loadSettings();
+  const { data: txs, error } = await supabase.from('transactions')
+    .select('*,auctions(title,slug,auction_images(image_url,is_primary,sort_order))')
+    .eq('winner_id', state.user.id).order('created_at', { ascending: false });
+  if (error) { box.innerHTML = `<div class="state-box error"><b>Gagal memuat transaksi</b>${esc(error.message)}</div>`; return; }
+  state.myOrders = txs || [];
+  if (!state.myOrders.length) {
+    box.innerHTML = '<div class="state-box"><b>Belum ada transaksi</b>Saat Anda memenangkan lelang, transaksinya akan muncul di sini untuk diselesaikan pembayarannya.</div>';
+    return;
+  }
+  box.innerHTML = state.myOrders.map((t) => orderCardHTML(t, settings)).join('');
+  bindOrderCards(box, settings);
+}
+function orderCardHTML(t, settings) {
+  const a = t.auctions || {};
+  const imgs = Array.isArray(a.auction_images) ? [...a.auction_images].sort((x, y) => (y.is_primary ? 1 : 0) - (x.is_primary ? 1 : 0)) : [];
+  const img = imgs.length ? imgs[0].image_url : '';
+  const overdue = t.payment_status === 'Awaiting Payment' && t.payment_deadline && new Date(t.payment_deadline) < new Date();
+  let actions = '';
+  if (t.payment_status === 'Awaiting Payment' || t.payment_status === 'Rejected') {
+    actions += `<div style="background:#FFFBEB;border:1px solid var(--gold);border-radius:10px;padding:12px 14px;font-size:14px;margin-top:10px">
+      <b>Instruksi pembayaran:</b> ${esc(settings.payInstructions || 'Bayar via wallet atau transfer manual lalu unggah buktinya.')}<br>
+      Batas waktu: <b>${p4dt(t.payment_deadline)} WIB</b> ${overdue ? '<b style="color:var(--red)">(sudah lewat — transaksi akan dinyatakan gagal)</b>' : `(sisa <span class="countdown" data-countdown="${esc(t.payment_deadline)}">${fmtCountdown(t.payment_deadline)}</span>)`}
+      ${t.payment_status === 'Rejected' && t.rejection_reason ? `<br><span style="color:var(--red)">Ditolak: ${esc(t.rejection_reason)}</span>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-gold btn-sm" data-paywallet="${esc(t.id)}">Bayar via Wallet (${rp(t.final_price)})</button>
+        <label class="btn btn-light btn-sm" style="cursor:pointer">Unggah Bukti Transfer<input type="file" accept="image/*,.pdf" class="hidden" data-proof="${esc(t.id)}"></label>
+      </div></div>`;
+  }
+  if (t.payment_status === 'Payment Submitted') actions += '<p style="font-size:14px;color:#2563EB;margin-top:10px">Bukti pembayaran terkirim — menunggu verifikasi admin.</p>';
+  if (t.payment_status === 'Paid' && !t.address_submitted_at) {
+    actions += `<div style="margin-top:10px"><button class="btn btn-gold btn-sm" data-addr="${esc(t.id)}">Isi Alamat Pengiriman</button></div><div class="addr-slot"></div>`;
+  }
+  if (t.payment_status === 'Paid' && t.address_submitted_at) actions += `<p style="font-size:14px;margin-top:10px">Alamat terkirim: <b>${esc(t.ship_recipient_name || '')}</b>, ${esc(t.ship_city || '')}. Status pengiriman: <b>${esc(t.shipping_status || '')}</b></p>`;
+  if (t.shipping_status === 'Dalam Pengiriman') {
+    actions += `<div style="background:#F0FDF4;border:1px solid var(--green);border-radius:10px;padding:12px 14px;font-size:14px;margin-top:10px">
+      🚚 Dikirim via <b>${esc(t.courier_name || '-')}</b> — No. Resi: <b>${esc(t.tracking_number || '-')}</b> (dikirim ${p4dt(t.shipped_at)})
+      <div style="margin-top:10px"><button class="btn btn-gold btn-sm" data-received="${esc(t.id)}">Konfirmasi Barang Diterima</button></div></div>`;
+  }
+  if (t.payment_status === 'Completed') actions += '<p style="font-size:14px;color:var(--green);margin-top:10px"><b>Transaksi selesai.</b> Barang telah diterima.</p>';
+  if (t.payment_status === 'Expired' || t.payment_status === 'Cancelled') actions += '<p style="font-size:14px;color:var(--red);margin-top:10px"><b>Transaksi gagal</b> — pembayaran tidak diselesaikan dalam batas waktu.</p>';
+  return `<div class="card" style="padding:18px;margin-bottom:16px" data-txcard="${esc(t.id)}">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      ${img ? `<img src="${esc(img)}" alt="" style="width:110px;height:110px;object-fit:cover;border-radius:12px">` : ''}
+      <div style="flex:1;min-width:240px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:17px">${esc(a.title || 'Lelang')}</b> ${payStatusPill(t.payment_status)}</div>
+        <p style="color:var(--muted);font-size:14px;margin:6px 0">Harga akhir: <b style="color:var(--text)">${rp(t.final_price)}</b> &middot; Metode: ${esc(t.payment_method || '—')} &middot; Pengiriman: <b>${esc(t.shipping_status || '—')}</b></p>
+        ${a.slug ? `<a class="btn btn-light btn-sm" href="#/auction/${esc(a.slug)}">Lihat Lelang</a>` : ''}
+        ${actions}
+      </div>
+    </div>
+  </div>`;
+}
+function bindOrderCards(box, settings) {
+  box.querySelectorAll('[data-paywallet]').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.getAttribute('data-paywallet');
+    const res = await openConfirm({ title: 'Bayar via Wallet', body: 'Saldo wallet Anda (termasuk dana bid yang tertahan untuk lelang ini) akan dipakai untuk membayar transaksi ini sekarang.', okLabel: 'Bayar Sekarang' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('buyer_pay_with_wallet', { p_tx_id: id });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Pembayaran berhasil. Silakan isi alamat pengiriman.');
+    if (state.user) loadWallet(true);
+    renderOrders();
+  }));
+  box.querySelectorAll('[data-proof]').forEach((inp) => inp.addEventListener('change', async () => {
+    const file = inp.files?.[0]; if (!file) return;
+    const txId = inp.getAttribute('data-proof');
+    try {
+      const path = `${state.user.id}/${txId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      await uploadToBucket('payment-proofs', path, file);
+      const { data, error } = await supabase.rpc('buyer_submit_payment_proof', {
+        p_tx_id: txId, p_file_url: path, p_storage_path: path, p_file_name: file.name, p_method: 'Transfer Bank', p_notes: null });
+      if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+      toast('Bukti pembayaran terkirim. Menunggu verifikasi admin.');
+      renderOrders();
+    } catch (e) { toast('Gagal mengunggah bukti: ' + (e.message || e)); }
+  }));
+  box.querySelectorAll('[data-addr]').forEach((b) => b.addEventListener('click', () => {
+    const card = b.closest('[data-txcard]'); const slot = card?.querySelector('.addr-slot'); if (!slot) return;
+    const txId = b.getAttribute('data-addr');
+    slot.innerHTML = `<form class="addr-form" style="margin-top:12px;background:#F8FAFC;border:1px solid var(--line);border-radius:12px;padding:16px">
+      <b>Formulir Alamat Pengiriman</b>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label>Nama lengkap penerima</label><input required name="nm"></div>
+        <div class="field"><label>No. telepon / WhatsApp</label><input required name="ph"></div>
+        <div class="field"><label>Provinsi</label><input required name="pv"></div>
+        <div class="field"><label>Kota/Kabupaten</label><input required name="ct"></div>
+        <div class="field"><label>Kecamatan</label><input required name="dc"></div>
+        <div class="field"><label>Kelurahan/Desa</label><input required name="sd"></div>
+        <div class="field"><label>Kode pos</label><input required name="pc"></div>
+      </div>
+      <div class="field"><label>Alamat lengkap (jalan, nomor rumah, gedung, patokan)</label><textarea required name="ad" rows="2" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></textarea></div>
+      <div class="field"><label>Catatan untuk kurir (opsional)</label><input name="cn"></div>
+      <button class="btn btn-gold" type="submit">Kirim Alamat Pengiriman</button>
+    </form>`;
+    const form = slot.querySelector('form');
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const { data, error } = await supabase.rpc('buyer_submit_address', {
+        p_tx_id: txId, p_name: fd.get('nm'), p_phone: fd.get('ph'), p_province: fd.get('pv'), p_city: fd.get('ct'),
+        p_district: fd.get('dc'), p_subdistrict: fd.get('sd'), p_postal_code: fd.get('pc'),
+        p_address_detail: fd.get('ad'), p_courier_note: fd.get('cn') || null });
+      if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+      toast('Alamat pengiriman terkirim. Admin akan memproses pengiriman.');
+      renderOrders();
+    });
+  }));
+  box.querySelectorAll('[data-received]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Konfirmasi Barang Diterima', body: 'Pastikan barang sudah benar-benar Anda terima. Setelah konfirmasi, transaksi dinyatakan selesai.', okLabel: 'Ya, Barang Diterima' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('buyer_confirm_received', { p_tx_id: b.getAttribute('data-received') });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Terima kasih! Transaksi selesai.');
+    renderOrders();
+  }));
+  tickCountdowns();
+}
+
+/* ---------- Wallet: Deposit & Penjamin ---------- */
+async function renderDepositSection() {
+  const slot = $('depositSection'); if (!slot || !state.user) return;
+  const [depRes, reqRes, txRes] = await Promise.all([
+    supabase.from('user_deposits').select('*').eq('user_id', state.user.id).maybeSingle(),
+    supabase.from('deposit_requests').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(10),
+    supabase.from('deposit_transactions').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(10),
+  ]);
+  const dep = depRes.data; state.myDeposit = dep;
+  const bal = Number(dep?.verified_balance || 0);
+  const g = state.profile || {};
+  const reqs = reqRes.data || []; const dtxs = txRes.data || [];
+  slot.innerHTML = `
+    <h2 style="margin:0 0 12px;font-size:21px">🛡️ Deposit &amp; Penjamin</h2>
+    <p style="color:var(--muted);font-size:14px;margin-top:0">Sebagian lelang mensyaratkan deposit terverifikasi dan data penjamin sebelum Anda dapat menawar. Deposit tercatat terpisah dari saldo wallet dan memiliki riwayat sendiri.</p>
+    <div class="wallet-grid">
+      <div class="wallet-card"><span>Deposit Terverifikasi</span><b style="color:var(--green)">${rp(bal)}</b><p style="color:var(--muted);font-size:12.5px">Dipakai untuk memenuhi syarat deposit lelang</p></div>
+      <div class="wallet-card"><span>Data Penjamin</span><b>${g.guarantor_completed ? '✅ Lengkap' : '⚠️ Belum lengkap'}</b><p style="color:var(--muted);font-size:12.5px">${g.guarantor_completed ? esc(g.guarantor_name || '') + ' (' + esc(g.guarantor_relation || '') + ')' : 'Wajib untuk lelang berdeposit'}</p></div>
+    </div>
+    <div class="two-col" style="margin-top:16px">
+      <form id="guarantorForm" class="card" style="padding:18px">
+        <b>Formulir Data Penjamin</b>
+        <div class="field"><label>Nama penjamin</label><input id="gName" value="${esc(g.guarantor_name || '')}" required></div>
+        <div class="field"><label>No. telepon penjamin</label><input id="gPhone" value="${esc(g.guarantor_phone || '')}" required></div>
+        <div class="field"><label>Hubungan dengan Anda</label><input id="gRel" value="${esc(g.guarantor_relation || '')}" placeholder="mis. Keluarga / Saudara / Rekan" required></div>
+        <div class="field"><label>Alamat penjamin</label><input id="gAddr" value="${esc(g.guarantor_address || '')}" required></div>
+        <div class="field"><label>Nomor identitas penjamin (KTP)</label><input id="gIdn" value="${esc(g.guarantor_id_number || '')}" required></div>
+        <button class="btn btn-navy btn-block" type="submit">Simpan Data Penjamin</button>
+      </form>
+      <div class="card" style="padding:18px">
+        <b>Ajukan Deposit</b>
+        <p style="color:var(--muted);font-size:13.5px">Transfer sesuai instruksi platform, lalu ajukan nominalnya di sini. Admin akan memverifikasi sebelum deposit aktif.</p>
+        <form id="depositForm">
+          <div class="field"><label>Nominal deposit (Rp)</label><input id="depAmount" type="number" min="1000" step="1000" required placeholder="mis. 500000"></div>
+          <div class="field"><label>Bukti transfer (opsional)</label><input id="depProof" type="file" accept="image/*,.pdf"></div>
+          <button class="btn btn-gold btn-block" type="submit">Ajukan Deposit</button>
+        </form>
+        ${reqs.length ? `<h4 style="margin:16px 0 8px">Pengajuan Terakhir</h4>` + reqs.map((r) => `<div style="font-size:14px;padding:8px 0;border-top:1px solid var(--line)">${rp(r.amount)} — <b>${esc(r.status)}</b> <span style="color:var(--muted)">${p4dt(r.created_at)}</span>${r.admin_note ? `<br><span style="color:var(--muted)">Catatan admin: ${esc(r.admin_note)}</span>` : ''}</div>`).join('') : ''}
+        ${dtxs.length ? `<h4 style="margin:16px 0 8px">Riwayat Deposit</h4>` + dtxs.map((r) => `<div style="font-size:14px;padding:8px 0;border-top:1px solid var(--line)"><b>${esc(r.type)}</b> — ${Number(r.amount) >= 0 ? '+' : ''}${rp(r.amount)} <span style="color:var(--muted)">${p4dt(r.created_at)}${r.description ? ' · ' + esc(r.description) : ''}</span></div>`).join('') : ''}
+      </div>
+    </div>`;
+  $('guarantorForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const { data, error } = await supabase.rpc('update_guarantor', {
+      p_name: $('gName').value, p_phone: $('gPhone').value, p_relation: $('gRel').value,
+      p_address: $('gAddr').value, p_id_number: $('gIdn').value });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Data penjamin tersimpan.');
+    await loadProfile(); renderWallet();
+  });
+  $('depositForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const amount = Number($('depAmount').value || 0);
+    const file = $('depProof').files?.[0];
+    let path = null;
+    try {
+      if (file) {
+        path = `${state.user.id}/deposits/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        await uploadToBucket('payment-proofs', path, file);
+      }
+      const { data, error } = await supabase.rpc('submit_deposit', { p_amount: amount, p_proof_url: path, p_storage_path: path });
+      if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+      toast('Pengajuan deposit terkirim. Menunggu verifikasi admin.');
+      renderWallet();
+    } catch (e) { toast('Gagal: ' + (e.message || e)); }
+  });
+}
+
+/* ---------- Seller: permohonan akun seller ---------- */
+async function renderSellerApplication(box) {
+  const { data: apps } = await supabase.from('seller_applications').select('*')
+    .eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(1);
+  const app = (apps || [])[0];
+  if (app && app.status === 'Menunggu') {
+    box.innerHTML = `<div class="state-box"><b>Permohonan Seller Sedang Diperiksa</b>Permohonan Anda (${esc(app.store_name || 'tanpa nama toko')}) diajukan pada ${p4dt(app.created_at)} dan sedang menunggu pemeriksaan admin. Anda akan menerima notifikasi setelah disetujui atau ditolak.</div>`;
+    return;
+  }
+  box.innerHTML = `<div class="card" style="padding:24px;max-width:640px">
+    <h3 style="margin-top:0">Ajukan Permohonan Menjadi Seller</h3>
+    ${app && app.status === 'Ditolak' ? `<p style="color:var(--red);font-size:14px">Permohonan sebelumnya ditolak.${app.admin_note ? ' Catatan admin: ' + esc(app.admin_note) : ''} Anda dapat mengajukan kembali.</p>` : ''}
+    <p style="color:var(--muted);font-size:14.5px">Sesuai ketentuan platform, hak menjual harus melalui persetujuan admin. Setelah disetujui, Anda dapat mengajukan barang untuk dilelang melalui Seller Hub.</p>
+    <form id="sellerApplyForm">
+      <div class="field"><label>Nama toko / usaha</label><input id="saStore" placeholder="mis. Koleksi Antik Jaya"></div>
+      <div class="field"><label>Ceritakan singkat barang yang akan Anda jual</label><textarea id="saDesc" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></textarea></div>
+      <button class="btn btn-gold" type="submit">Kirim Permohonan ke Admin</button>
+    </form>
+  </div>`;
+  $('sellerApplyForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const { data, error } = await supabase.rpc('apply_seller', { p_store_name: $('saStore').value || null, p_description: $('saDesc').value || null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Permohonan terkirim. Menunggu pemeriksaan admin.');
+    loadSeller();
+  });
+}
+
+/* ---------- Seller: pengajuan barang ---------- */
+async function renderSellerSubmissions(panel) {
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>';
+  const { data: subs, error } = await supabase.from('item_submissions').select('*,categories(name)')
+    .eq('seller_id', state.user.id).order('created_at', { ascending: false });
+  if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat pengajuan</b>${esc(error.message)}</div>`; return; }
+  const list = subs || [];
+  const catOpts = state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  const editing = state.editingSubmissionId ? list.find((s) => s.id === state.editingSubmissionId) : null;
+  panel.innerHTML = `
+    <div class="card" style="padding:20px;margin-bottom:20px">
+      <h3 style="margin-top:0">${editing ? 'Ubah Pengajuan Barang' : 'Ajukan Barang untuk Dilelang'}</h3>
+      <p style="color:var(--muted);font-size:14px">Barang yang Anda ajukan akan diperiksa admin. Admin menentukan jadwal lelang; Anda menyetujui atau menolak jadwal tersebut sebelum barang diterbitkan. Setelah barang ditetapkan untuk lelang, Anda hanya dapat mengubah kategorinya.</p>
+      <form id="subForm">
+        <div class="form-grid">
+          <div class="field"><label>Nama barang</label><input id="subTitle" required value="${esc(editing?.title || '')}"></div>
+          <div class="field"><label>Kategori</label><select id="subCat">${catOpts}</select></div>
+          <div class="field"><label>Kondisi</label><input id="subCond" value="${esc(editing?.condition || '')}" placeholder="Baru / Bekas seperti baru"></div>
+          <div class="field"><label>Lokasi</label><input id="subLoc" value="${esc(editing?.location || '')}"></div>
+          <div class="field"><label>Harga awal usulan (Rp)</label><input id="subStart" type="number" min="0" value="${esc(editing?.starting_price ?? '')}" required></div>
+          <div class="field"><label>Reserve price (opsional)</label><input id="subReserve" type="number" min="0" value="${esc(editing?.reserve_price ?? '')}"></div>
+          <div class="field"><label>Buy Now (opsional)</label><input id="subBuyNow" type="number" min="0" value="${esc(editing?.buy_now_price ?? '')}"></div>
+          <div class="field"><label>Usulan waktu mulai</label><input id="subWhen" type="datetime-local" value="${editing?.proposed_start_time ? new Date(editing.proposed_start_time).toISOString().slice(0, 16) : ''}"></div>
+          <div class="field"><label>Usulan durasi (menit)</label><input id="subDur" type="number" min="1" value="${esc(editing?.proposed_duration_minutes ?? 1440)}"></div>
+        </div>
+        <div class="field"><label>Deskripsi barang</label><textarea id="subDesc" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">${esc(editing?.description || '')}</textarea></div>
+        <div class="field"><label>Foto barang (bisa lebih dari satu)</label><input id="subImages" type="file" accept="image/*" multiple></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-gold" type="submit">${editing ? 'Simpan Perubahan' : 'Kirim Pengajuan ke Admin'}</button>
+          ${editing ? '<button class="btn btn-light" type="button" id="subCancelEdit">Batal Ubah</button>' : ''}
+        </div>
+      </form>
+    </div>
+    <h3 style="margin:0 0 12px">Pengajuan Saya (${list.length})</h3>
+    ${list.length ? list.map((s) => submissionCardHTML(s)).join('') : '<div class="state-box"><b>Belum ada pengajuan</b>Ajukan barang pertama Anda lewat formulir di atas.</div>'}`;
+  if (editing) $('subCat').value = editing.category_id || '';
+  $('subCancelEdit')?.addEventListener('click', () => { state.editingSubmissionId = null; renderSellerSubmissions(panel); });
+  $('subForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = ev.target.querySelector('[type=submit]'); btn.disabled = true;
+    try {
+      let urls = editing ? (editing.image_urls || []) : [];
+      const files = $('subImages').files;
+      for (const f of files) {
+        const path = `${state.user.id}/submissions/${Date.now()}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        await uploadToBucket('auction-images', path, f);
+        urls.push(supabase.storage.from('auction-images').getPublicUrl(path).data.publicUrl);
+      }
+      const payload = {
+        p_title: $('subTitle').value, p_description: $('subDesc').value || null,
+        p_category_id: $('subCat').value || null, p_condition: $('subCond').value || null, p_location: $('subLoc').value || null,
+        p_starting_price: Number($('subStart').value || 0),
+        p_reserve_price: $('subReserve').value ? Number($('subReserve').value) : null,
+        p_buy_now_price: $('subBuyNow').value ? Number($('subBuyNow').value) : null,
+        p_image_urls: urls,
+        p_proposed_start_time: $('subWhen').value ? new Date($('subWhen').value).toISOString() : null,
+        p_proposed_duration_minutes: Number($('subDur').value || 1440),
+      };
+      const { data, error } = editing
+        ? await supabase.rpc('seller_edit_submission', { p_id: editing.id, ...payload })
+        : await supabase.rpc('submit_item', payload);
+      if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); btn.disabled = false; return; }
+      toast(editing ? 'Pengajuan diperbarui.' : 'Pengajuan terkirim. Menunggu pemeriksaan admin.');
+      state.editingSubmissionId = null;
+      renderSellerSubmissions(panel);
+    } catch (e) { toast('Gagal: ' + (e.message || e)); btn.disabled = false; }
+  });
+  panel.querySelectorAll('[data-subapprove]').forEach((b) => b.addEventListener('click', async () => {
+    const { data, error } = await supabase.rpc('seller_respond_schedule', { p_id: b.getAttribute('data-subapprove'), p_approve: true, p_reason: null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Jadwal disetujui. Admin akan menerbitkan lelangnya.');
+    renderSellerSubmissions(panel);
+  }));
+  panel.querySelectorAll('[data-subreject]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Tolak Jadwal Lelang', body: 'Pengajuan akan dikembalikan ke admin untuk diperbaiki atau dijadwalkan ulang.', needReason: true, reasonRequired: true, okLabel: 'Tolak Jadwal' });
+    if (!res || !res.reason) return;
+    const { data, error } = await supabase.rpc('seller_respond_schedule', { p_id: b.getAttribute('data-subreject'), p_approve: false, p_reason: res.reason });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Jadwal ditolak dan dikembalikan ke admin.');
+    renderSellerSubmissions(panel);
+  }));
+  panel.querySelectorAll('[data-subedit]').forEach((b) => b.addEventListener('click', () => {
+    state.editingSubmissionId = b.getAttribute('data-subedit');
+    renderSellerSubmissions(panel);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }));
+  panel.querySelectorAll('[data-subcat]').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.getAttribute('data-subcat');
+    const sel = panel.querySelector(`[data-subcatsel="${id}"]`);
+    const { data, error } = await supabase.rpc('seller_update_submission_category', { p_id: id, p_category_id: sel.value || null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Kategori diperbarui.');
+    renderSellerSubmissions(panel);
+  }));
+}
+function submissionCardHTML(s) {
+  const imgs = Array.isArray(s.image_urls) ? s.image_urls : [];
+  const editable = ['Menunggu Review', 'Ditolak', 'Jadwal Ditolak'].includes(s.status);
+  let extra = '';
+  if (s.status === 'Menunggu Persetujuan Jadwal') {
+    extra = `<div style="background:#FFFBEB;border:1px solid var(--gold);border-radius:10px;padding:12px 14px;font-size:14px;margin-top:10px">
+      <b>Jadwal dari admin:</b> mulai ${p4dt(s.admin_start_time)} WIB, durasi ${p4dur(s.admin_duration_minutes)}${Number(s.min_deposit) > 0 ? `, deposit minimum peserta ${rp(s.min_deposit)}` : ''}.<br>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-gold btn-sm" data-subapprove="${esc(s.id)}">Setujui Jadwal</button>
+        <button class="btn btn-light btn-sm" data-subreject="${esc(s.id)}">Tolak Jadwal</button>
+      </div></div>`;
+  }
+  if (s.status === 'Jadwal Ditolak') extra = `<p style="font-size:14px;color:var(--red);margin-top:8px">Jadwal Anda tolak: ${esc(s.schedule_reject_reason || '')} — menunggu admin menjadwalkan ulang.</p>`;
+  if (s.status === 'Ditolak' && s.admin_note) extra = `<p style="font-size:14px;color:var(--red);margin-top:8px">Catatan admin: ${esc(s.admin_note)}</p>`;
+  if (s.status === 'Terjadwal' && s.auction_id) extra = `<div style="margin-top:10px"><a class="btn btn-light btn-sm" href="#/auction/${esc((state.auctions.find((a) => a.id === s.auction_id) || {}).slug || '')}">Lihat Lelang</a></div>`;
+  return `<div class="card" style="padding:16px;margin-bottom:14px">
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      ${imgs.length ? `<img src="${esc(imgs[0])}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:10px">` : ''}
+      <div style="flex:1;min-width:230px">
+        <b>${esc(s.title)}</b> <span class="badge badge-watch">${esc(s.status)}</span>
+        <p style="color:var(--muted);font-size:13.5px;margin:5px 0">Kategori: ${esc(s.categories?.name || '—')} &middot; Harga awal: ${rp(s.starting_price)} &middot; Diajukan ${p4dt(s.created_at)}</p>
+        ${extra}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center">
+          ${editable ? `<button class="btn btn-light btn-sm" data-subedit="${esc(s.id)}">Ubah Pengajuan</button>` : ''}
+          ${!editable ? `<select data-subcatsel="${esc(s.id)}" style="padding:8px;border:1px solid var(--line);border-radius:8px">${state.categories.map((c) => `<option value="${esc(c.id)}" ${c.id === s.category_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+          <button class="btn btn-light btn-sm" data-subcat="${esc(s.id)}">Simpan Kategori</button>
+          <span style="font-size:12.5px;color:var(--muted)">Setelah ditetapkan, hanya kategori yang boleh diubah</span>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- Seller: penjualan & biaya admin ---------- */
+async function renderSellerTransactions(panel) {
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/5"></div>';
+  const { data: txs, error } = await supabase.from('transactions')
+    .select('*,auctions(title,slug)').eq('seller_id', state.user.id).order('created_at', { ascending: false });
+  if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat transaksi</b>${esc(error.message)}</div>`; return; }
+  const list = txs || [];
+  if (!list.length) { panel.innerHTML = '<div class="state-box"><b>Belum ada penjualan</b>Transaksi barang Anda yang terjual akan tampil di sini beserta rincian biaya admin dan pencairannya.</div>'; return; }
+  panel.innerHTML = list.map((t) => `
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <b>${esc(t.auctions?.title || 'Lelang')}</b> ${payStatusPill(t.payment_status)}
+      <div style="font-size:14px;margin-top:8px;line-height:1.9">
+        Harga jual: <b>${rp(t.final_price)}</b><br>
+        Biaya admin: ${esc(t.admin_fee_percent ?? 0)}% = <b>${rp(t.admin_fee_amount || 0)}</b><br>
+        Pendapatan bersih Anda: <b style="color:var(--green)">${rp(t.seller_net_amount || 0)}</b><br>
+        Status biaya: <b>${esc(t.fee_status || '—')}</b> &middot; Pencairan: <b>${esc(t.payout_status || '—')}</b> &middot; Pengiriman: ${esc(t.shipping_status || '—')}
+        ${t.fee_reject_reason ? `<br><span style="color:var(--red)">Alasan penolakan biaya: ${esc(t.fee_reject_reason)}</span>` : ''}
+      </div>
+      ${t.fee_status === 'Menunggu Persetujuan Seller' ? `<div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-gold btn-sm" data-feeok="${esc(t.id)}">Setujui Biaya Admin</button>
+        <button class="btn btn-light btn-sm" data-feeno="${esc(t.id)}">Tolak Biaya</button></div>` : ''}
+    </div>`).join('');
+  panel.querySelectorAll('[data-feeok]').forEach((b) => b.addEventListener('click', async () => {
+    const { data, error } = await supabase.rpc('seller_respond_fee', { p_tx_id: b.getAttribute('data-feeok'), p_approve: true, p_reason: null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Biaya admin disetujui. Dana menunggu pencairan admin.');
+    renderSellerTransactions(panel);
+  }));
+  panel.querySelectorAll('[data-feeno]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Tolak Potongan Biaya Admin', body: 'Admin akan menerima alasan Anda dan dapat memperbarui perhitungan biaya.', needReason: true, reasonRequired: true, okLabel: 'Tolak Biaya' });
+    if (!res || !res.reason) return;
+    const { data, error } = await supabase.rpc('seller_respond_fee', { p_tx_id: b.getAttribute('data-feeno'), p_approve: false, p_reason: res.reason });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Penolakan biaya terkirim ke admin.');
+    renderSellerTransactions(panel);
+  }));
+}
+
+/* ---------- Admin: pengajuan seller ---------- */
+async function renderAdminSellerReq() {
+  const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+  const { data, error } = await supabase.from('seller_applications')
+    .select('*,profiles(username,full_name)').order('created_at', { ascending: false });
+  if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat</b>${esc(error.message)}</div>`; return; }
+  const list = data || [];
+  panel.innerHTML = `<h3 style="margin-top:0">Permohonan Menjadi Seller (${list.filter((x) => x.status === 'Menunggu').length} menunggu)</h3>` +
+    (list.length ? list.map((a) => `
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <b>${esc(a.profiles?.full_name || a.profiles?.username || 'Pengguna')}</b> (@${esc(a.profiles?.username || '-')})
+      <span class="badge badge-watch">${esc(a.status)}</span>
+      <p style="font-size:14px;color:var(--muted);margin:6px 0">Toko: <b style="color:var(--text)">${esc(a.store_name || '—')}</b> &middot; Diajukan ${p4dt(a.created_at)}<br>${esc(a.description || '')}</p>
+      ${a.admin_note ? `<p style="font-size:13.5px">Catatan: ${esc(a.admin_note)}</p>` : ''}
+      ${a.status === 'Menunggu' ? `<div style="display:flex;gap:8px">
+        <button class="btn btn-gold btn-sm" data-srok="${esc(a.id)}">Setujui Seller</button>
+        <button class="btn btn-light btn-sm" data-srno="${esc(a.id)}">Tolak</button></div>` : ''}
+    </div>`).join('') : '<div class="state-box"><b>Belum ada permohonan seller</b></div>');
+  const act = async (id, approve) => {
+    const res = await openConfirm({
+      title: approve ? 'Setujui Permohonan Seller' : 'Tolak Permohonan Seller',
+      body: approve ? 'Pengguna ini akan memperoleh hak akses seller.' : 'Pengguna akan menerima notifikasi penolakan beserta catatan Anda.',
+      needReason: true, reasonRequired: !approve, okLabel: approve ? 'Setujui' : 'Tolak' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('admin_review_seller_application', { p_id: id, p_approve: approve, p_note: res.reason || null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast(approve ? 'Seller disetujui.' : 'Permohonan ditolak.');
+    renderAdminSellerReq();
+  };
+  panel.querySelectorAll('[data-srok]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-srok'), true)));
+  panel.querySelectorAll('[data-srno]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-srno'), false)));
+}
+
+/* ---------- Admin: pengajuan barang ---------- */
+async function renderAdminItems() {
+  const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+  const { data, error } = await supabase.from('item_submissions')
+    .select('*,profiles(username,full_name),categories(name)').order('created_at', { ascending: false });
+  if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat</b>${esc(error.message)}</div>`; return; }
+  const list = data || [];
+  panel.innerHTML = `<h3 style="margin-top:0">Pengajuan Barang dari Seller (${list.filter((x) => ['Menunggu Review', 'Jadwal Ditolak'].includes(x.status)).length} menunggu tindakan)</h3>` +
+    (list.length ? list.map((s) => {
+      const imgs = Array.isArray(s.image_urls) ? s.image_urls : [];
+      return `<div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        ${imgs.length ? `<img src="${esc(imgs[0])}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:10px">` : ''}
+        <div style="flex:1;min-width:240px">
+          <b>${esc(s.title)}</b> <span class="badge badge-watch">${esc(s.status)}</span>
+          <p style="font-size:14px;color:var(--muted);margin:6px 0">
+            Seller: <b style="color:var(--text)">@${esc(s.profiles?.username || '-')}</b> &middot; Kategori: ${esc(s.categories?.name || '—')} &middot; Kondisi: ${esc(s.condition || '—')}<br>
+            Harga awal: ${rp(s.starting_price)}${s.reserve_price ? ' &middot; Reserve: ' + rp(s.reserve_price) : ''}${s.buy_now_price ? ' &middot; Buy Now: ' + rp(s.buy_now_price) : ''}<br>
+            Usulan seller: ${s.proposed_start_time ? p4dt(s.proposed_start_time) + ' WIB' : '—'}, durasi ${p4dur(s.proposed_duration_minutes)}<br>
+            ${esc(s.description || '')}</p>
+          ${s.admin_start_time ? `<p style="font-size:14px">Jadwal admin: <b>${p4dt(s.admin_start_time)} WIB</b>, durasi ${p4dur(s.admin_duration_minutes)}, deposit min ${rp(s.min_deposit || 0)}</p>` : ''}
+          ${s.schedule_reject_reason ? `<p style="font-size:14px;color:var(--red)">Alasan penolakan jadwal oleh seller: ${esc(s.schedule_reject_reason)}</p>` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['Menunggu Review', 'Jadwal Ditolak'].includes(s.status) ? `<button class="btn btn-gold btn-sm" data-itemreview="${esc(s.id)}">Periksa &amp; Tentukan Jadwal</button>
+            <button class="btn btn-light btn-sm" data-itemreject="${esc(s.id)}">Tolak Pengajuan</button>` : ''}
+            ${s.status === 'Disetujui' ? `<button class="btn btn-gold btn-sm" data-itempublish="${esc(s.id)}">Terbitkan Lelang</button>` : ''}
+            ${s.status === 'Terjadwal' ? `<span style="font-size:13.5px;color:var(--green)">Sudah diterbitkan sebagai lelang terjadwal</span>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+    }).join('') : '<div class="state-box"><b>Belum ada pengajuan barang</b></div>');
+  panel.querySelectorAll('[data-itemreview]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({
+      title: 'Tentukan Jadwal Lelang', body: 'Jadwal ini harus disetujui seller terlebih dahulu sebelum lelang diterbitkan.',
+      extraHTML: `<div class="form-grid">
+        <div class="field"><label>Waktu mulai</label><input type="datetime-local" data-cfield="start" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+        <div class="field"><label>Durasi (menit)</label><input type="number" data-cfield="dur" value="1440" min="1" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+        <div class="field"><label>Deposit minimum peserta (Rp, 0 = tanpa syarat)</label><input type="number" data-cfield="mindep" value="0" min="0" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+      </div>`,
+      needReason: true, reasonRequired: false, okLabel: 'Kirim Jadwal ke Seller' });
+    if (!res) return;
+    if (!res.extra.start) { toast('Waktu mulai wajib diisi'); return; }
+    const { data, error } = await supabase.rpc('admin_review_item', {
+      p_id: b.getAttribute('data-itemreview'), p_approve: true, p_note: res.reason || null,
+      p_start_time: new Date(res.extra.start).toISOString(), p_duration_minutes: Number(res.extra.dur || 1440),
+      p_min_deposit: Number(res.extra.mindep || 0) });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Jadwal terkirim ke seller untuk persetujuan.');
+    renderAdminItems();
+  }));
+  panel.querySelectorAll('[data-itemreject]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Tolak Pengajuan Barang', body: 'Seller akan menerima catatan penolakan Anda.', needReason: true, reasonRequired: true, okLabel: 'Tolak Pengajuan' });
+    if (!res || !res.reason) return;
+    const { data, error } = await supabase.rpc('admin_review_item', { p_id: b.getAttribute('data-itemreject'), p_approve: false, p_note: res.reason });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Pengajuan ditolak.');
+    renderAdminItems();
+  }));
+  panel.querySelectorAll('[data-itempublish]').forEach((b) => b.addEventListener('click', async () => {
+    const { data, error } = await supabase.rpc('admin_publish_submission', { p_id: b.getAttribute('data-itempublish') });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Lelang diterbitkan dan masuk halaman Lelang Mendatang.');
+    await loadData(false);
+    renderAdminItems();
+  }));
+}
+
+/* ---------- Admin: transaksi, pembayaran, pencairan, pengiriman ---------- */
+async function renderAdminOrders() {
+  const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+  const settings = await loadSettings();
+  const { data, error } = await supabase.from('transactions')
+    .select('*,auctions(title,slug)').order('created_at', { ascending: false }).limit(100);
+  if (error) { panel.innerHTML = `<div class="state-box error"><b>Gagal memuat</b>${esc(error.message)}</div>`; return; }
+  const list = data || [];
+  const ids = [...new Set(list.flatMap((t) => [t.winner_id, t.seller_id]).filter(Boolean))];
+  const nameMap = new Map();
+  if (ids.length) {
+    const { data: profs } = await supabase.from('profiles').select('id,username,full_name').in('id', ids);
+    (profs || []).forEach((p) => nameMap.set(p.id, p.username || p.full_name || 'Pengguna'));
+  }
+  const nm = (id) => '@' + (nameMap.get(id) || '-');
+  panel.innerHTML = `
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <b>Pengaturan Pembayaran &amp; Biaya Admin</b>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label>Biaya admin (%)</label><input id="setFee" type="number" min="0" max="100" step="0.5" value="${esc(settings.feePercent)}"></div>
+        <div class="field"><label>Tenggat pembayaran (jam)</label><input id="setDeadline" type="number" min="1" value="${esc(settings.deadlineHours)}"></div>
+      </div>
+      <div class="field"><label>Instruksi pembayaran untuk pemenang</label><textarea id="setInstr" rows="2" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">${esc(settings.payInstructions)}</textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-gold btn-sm" id="setSave">Simpan Pengaturan</button>
+        <button class="btn btn-light btn-sm" id="sweepExpired">Jalankan Pengecekan Pembayaran Kedaluwarsa</button>
+      </div>
+    </div>
+    <h3 style="margin:0 0 12px">Seluruh Transaksi (${list.length})</h3>` +
+    (list.length ? list.map((t) => `
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <b>${esc(t.auctions?.title || 'Lelang')}</b> ${payStatusPill(t.payment_status)}
+      <p style="font-size:14px;color:var(--muted);margin:6px 0">
+        Pemenang: <b style="color:var(--text)">${nm(t.winner_id)}</b> &middot; Seller: <b style="color:var(--text)">${nm(t.seller_id)}</b><br>
+        Harga: ${rp(t.final_price)} &middot; Tenggat bayar: ${p4dt(t.payment_deadline)} WIB &middot; Metode: ${esc(t.payment_method || '—')}<br>
+        Biaya admin: ${esc(t.admin_fee_percent ?? 0)}% = ${rp(t.admin_fee_amount || 0)} &middot; Bersih seller: ${rp(t.seller_net_amount || 0)}<br>
+        Status biaya: <b style="color:var(--text)">${esc(t.fee_status || '—')}</b> &middot; Pencairan: <b style="color:var(--text)">${esc(t.payout_status || '—')}</b> &middot; Pengiriman: <b style="color:var(--text)">${esc(t.shipping_status || '—')}</b>
+        ${t.courier_name ? `<br>Ekspedisi: ${esc(t.courier_name)} — Resi: <b style="color:var(--text)">${esc(t.tracking_number || '')}</b>` : ''}
+        ${t.address_submitted_at ? `<br>Alamat: ${esc(t.ship_recipient_name || '')}, ${esc(t.ship_address_detail || '')}, ${esc(t.ship_subdistrict || '')}, ${esc(t.ship_district || '')}, ${esc(t.ship_city || '')}, ${esc(t.ship_province || '')} ${esc(t.ship_postal_code || '')} — ${esc(t.ship_phone || '')}` : ''}
+        ${t.rejection_reason ? `<br><span style="color:var(--red)">Alasan tolak bayar: ${esc(t.rejection_reason)}</span>` : ''}
+        ${t.fee_reject_reason ? `<br><span style="color:var(--red)">Alasan tolak biaya: ${esc(t.fee_reject_reason)}</span>` : ''}
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${t.payment_status === 'Payment Submitted' ? `<button class="btn btn-gold btn-sm" data-txproof="${esc(t.id)}">Lihat Bukti</button>
+        <button class="btn btn-gold btn-sm" data-txverify="${esc(t.id)}">Verifikasi: Terima</button>
+        <button class="btn btn-light btn-sm" data-txreject="${esc(t.id)}">Verifikasi: Tolak</button>` : ''}
+        ${t.payment_status === 'Paid' && t.fee_status === 'Ditolak' ? `<button class="btn btn-light btn-sm" data-txfee="${esc(t.id)}">Ubah Biaya Admin</button>` : ''}
+        ${t.payment_status === 'Paid' && t.fee_status === 'Disetujui' && t.payout_status !== 'Sudah Dibayarkan' ? `<button class="btn btn-gold btn-sm" data-txpayout="${esc(t.id)}">Cairkan ke Seller (${rp(t.seller_net_amount || 0)})</button>` : ''}
+        ${t.payment_status === 'Paid' && t.address_submitted_at ? `<button class="btn btn-light btn-sm" data-txship="${esc(t.id)}">Kelola Pengiriman</button>` : ''}
+        ${['Awaiting Payment', 'Expired', 'Rejected'].includes(t.payment_status) ? `<button class="btn btn-light btn-sm" data-txnonpay="${esc(t.id)}">Tangani Gagal Bayar</button>` : ''}
+      </div>
+    </div>`).join('') : '<div class="state-box"><b>Belum ada transaksi</b></div>');
+  $('setSave').addEventListener('click', async () => {
+    const fee = Number($('setFee').value || 0); const dl = Number($('setDeadline').value || 24);
+    const r1 = await supabase.rpc('admin_update_setting', { p_key: 'platform_fee_percent', p_value: fee });
+    const r2 = await supabase.rpc('admin_update_setting', { p_key: 'payment_deadline_hours', p_value: dl });
+    const r3 = await supabase.rpc('admin_update_setting', { p_key: 'payment_instructions', p_value: $('setInstr').value });
+    if (r1.error || r2.error || r3.error) { toast('Gagal menyimpan sebagian pengaturan'); return; }
+    state.settings = {};
+    toast('Pengaturan tersimpan.');
+    renderAdminOrders();
+  });
+  $('sweepExpired').addEventListener('click', async () => {
+    const { data, error } = await supabase.rpc('check_expired_payments');
+    if (error) { toast('Gagal: ' + error.message); return; }
+    toast(`Pengecekan selesai: ${data?.expired || 0} transaksi dinyatakan kedaluwarsa.`);
+    renderAdminOrders();
+  });
+  panel.querySelectorAll('[data-txproof]').forEach((b) => b.addEventListener('click', async () => {
+    const { data: proofs } = await supabase.from('payment_proofs').select('*').eq('transaction_id', b.getAttribute('data-txproof')).order('created_at', { ascending: false }).limit(1);
+    const p = (proofs || [])[0];
+    if (!p) { toast('Bukti tidak ditemukan'); return; }
+    const url = await signedUrl('payment-proofs', p.storage_path || p.file_url);
+    if (url) window.open(url, '_blank'); else toast('Gagal membuka bukti');
+  }));
+  panel.querySelectorAll('[data-txverify]').forEach((b) => b.addEventListener('click', async () => {
+    const { data, error } = await supabase.rpc('admin_verify_payment', { p_tx_id: b.getAttribute('data-txverify'), p_approve: true, p_reason: null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Pembayaran terverifikasi (Paid).');
+    renderAdminOrders();
+  }));
+  panel.querySelectorAll('[data-txreject]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Tolak Pembayaran', body: 'Pemenang akan menerima alasan penolakan dan petunjuk perbaikan.', needReason: true, reasonRequired: true, okLabel: 'Tolak Pembayaran' });
+    if (!res || !res.reason) return;
+    const { data, error } = await supabase.rpc('admin_verify_payment', { p_tx_id: b.getAttribute('data-txreject'), p_approve: false, p_reason: res.reason });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Pembayaran ditolak.');
+    renderAdminOrders();
+  }));
+  panel.querySelectorAll('[data-txfee]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Ubah Biaya Admin', body: 'Persentase baru akan dihitung ulang dan dikirim ke seller untuk persetujuan.',
+      extraHTML: '<div class="field"><label>Biaya admin (%)</label><input type="number" data-cfield="pct" min="0" max="100" step="0.5" value="5" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>', okLabel: 'Kirim ke Seller' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('admin_adjust_fee', { p_tx_id: b.getAttribute('data-txfee'), p_percent: Number(res.extra.pct || 0) });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Biaya diperbarui dan dikirim ke seller.');
+    renderAdminOrders();
+  }));
+  panel.querySelectorAll('[data-txpayout]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Cairkan Dana ke Seller', body: 'Dana bersih (setelah biaya admin) akan masuk ke wallet seller sekarang.', okLabel: 'Cairkan' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('admin_payout_seller', { p_tx_id: b.getAttribute('data-txpayout') });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Dana berhasil dicairkan ke seller.');
+    renderAdminOrders();
+  }));
+  panel.querySelectorAll('[data-txship]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Kelola Pengiriman', body: 'Perbarui status pengiriman. Untuk status Dalam Pengiriman, ekspedisi dan nomor resi wajib diisi.',
+      extraHTML: `<div class="form-grid">
+        <div class="field"><label>Status</label><select data-cfield="st" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"><option>Sedang Diproses</option><option>Sedang Dikemas</option><option>Dalam Pengiriman</option></select></div>
+        <div class="field"><label>Nama ekspedisi</label><input data-cfield="courier" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+        <div class="field"><label>Nomor resi</label><input data-cfield="resi" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+        <div class="field"><label>Catatan pengiriman</label><input data-cfield="note" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+      </div>`, okLabel: 'Simpan Status' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('admin_update_shipping', {
+      p_tx_id: b.getAttribute('data-txship'), p_status: res.extra.st,
+      p_courier: res.extra.courier || null, p_tracking: res.extra.resi || null, p_note: res.extra.note || null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Status pengiriman diperbarui.');
+    renderAdminOrders();
+  }));
+  panel.querySelectorAll('[data-txnonpay]').forEach((b) => b.addEventListener('click', async () => {
+    const res = await openConfirm({ title: 'Tangani Pemenang Gagal Bayar', body: 'Transaksi dinyatakan gagal, reservasi wallet dilepas, dan barang kembali ke pengelolaan admin. Sanksi bersifat opsional.',
+      extraHTML: `<div class="form-grid">
+        <div class="field"><label>Potong deposit sanksi (Rp)</label><input type="number" data-cfield="forfeit" value="0" min="0" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+        <div class="field"><label>Sanksi akun</label><select data-cfield="ban" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="none">Tanpa sanksi akun</option><option value="temporary">Tangguhkan sementara</option><option value="permanent">Blokir permanen + blokir email</option></select></div>
+        <div class="field"><label>Lama penangguhan (hari)</label><input type="number" data-cfield="days" value="7" min="1" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"></div>
+      </div>`, needReason: true, reasonRequired: false, okLabel: 'Terapkan' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('admin_handle_nonpayment', {
+      p_tx_id: b.getAttribute('data-txnonpay'), p_forfeit_amount: Number(res.extra.forfeit || 0),
+      p_ban_mode: res.extra.ban, p_ban_days: Number(res.extra.days || 0), p_reason: res.reason || null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast('Sanksi diterapkan dan transaksi dinyatakan gagal.');
+    renderAdminOrders();
+  }));
+}
+
+/* ---------- Admin: deposit pengguna ---------- */
+async function renderAdminDeposits() {
+  const panel = $('adminPanel'); if (!panel) return;
+  panel.innerHTML = '<div class="skel" style="aspect-ratio:16/6"></div>';
+  const [reqRes, depRes] = await Promise.all([
+    supabase.from('deposit_requests').select('*,profiles(username,full_name)').order('created_at', { ascending: false }).limit(50),
+    supabase.from('user_deposits').select('*,profiles(username,full_name)').order('verified_balance', { ascending: false }),
+  ]);
+  const reqs = reqRes.data || []; const deps = depRes.data || [];
+  panel.innerHTML = `<h3 style="margin-top:0">Pengajuan Deposit (${reqs.filter((r) => r.status === 'Menunggu Verifikasi').length} menunggu verifikasi)</h3>` +
+    (reqs.length ? reqs.map((r) => `
+    <div class="card" style="padding:14px 16px;margin-bottom:10px">
+      <b>@${esc(r.profiles?.username || '-')}</b> — ${rp(r.amount)} <span class="badge badge-watch">${esc(r.status)}</span>
+      <span style="color:var(--muted);font-size:13.5px">${p4dt(r.created_at)}</span>
+      ${r.storage_path ? ` &middot; <a href="#" data-depproof="${esc(r.storage_path)}">Lihat bukti</a>` : ''}
+      ${r.status === 'Menunggu Verifikasi' ? `<div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-gold btn-sm" data-depok="${esc(r.id)}">Verifikasi Deposit</button>
+        <button class="btn btn-light btn-sm" data-depno="${esc(r.id)}">Tolak</button></div>` : ''}
+      ${r.admin_note ? `<div style="font-size:13.5px;color:var(--muted)">Catatan: ${esc(r.admin_note)}</div>` : ''}
+    </div>`).join('') : '<div class="state-box"><b>Belum ada pengajuan deposit</b></div>') +
+    `<h3 style="margin:22px 0 12px">Saldo Deposit Terverifikasi Pengguna</h3>` +
+    (deps.length ? `<div class="tbl-wrap"><table class="data"><thead><tr><th>Pengguna</th><th>Deposit Terverifikasi</th><th>Terakhir Diperbarui</th></tr></thead><tbody>${deps.map((d) => `<tr><td><b>${esc(d.profiles?.full_name || d.profiles?.username || 'Pengguna')}</b><br><span style="color:var(--muted);font-size:13px">@${esc(d.profiles?.username || '-')}</span></td><td>${rp(d.verified_balance)}</td><td>${p4dt(d.updated_at)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="state-box"><b>Belum ada deposit terverifikasi</b></div>');
+  panel.querySelectorAll('[data-depproof]').forEach((aEl) => aEl.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const url = await signedUrl('payment-proofs', aEl.getAttribute('data-depproof'));
+    if (url) window.open(url, '_blank'); else toast('Gagal membuka bukti');
+  }));
+  const act = async (id, approve) => {
+    const res = await openConfirm({ title: approve ? 'Verifikasi Deposit' : 'Tolak Deposit', body: approve ? 'Deposit akan aktif sebagai saldo deposit terverifikasi pengguna.' : 'Pengguna akan menerima catatan penolakan.', needReason: true, reasonRequired: !approve, okLabel: approve ? 'Verifikasi' : 'Tolak' });
+    if (!res) return;
+    const { data, error } = await supabase.rpc('admin_review_deposit', { p_id: id, p_approve: approve, p_note: res.reason || null });
+    if (error || data?.success === false) { toast('Gagal: ' + (error?.message || data?.error || 'tidak diketahui')); return; }
+    toast(approve ? 'Deposit terverifikasi.' : 'Deposit ditolak.');
+    renderAdminDeposits();
+  };
+  panel.querySelectorAll('[data-depok]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-depok'), true)));
+  panel.querySelectorAll('[data-depno]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-depno'), false)));
+}
 </script>
 </body>
 </html>
